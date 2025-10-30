@@ -64,9 +64,7 @@ fn ensure_session_newline_once(path: &PathBuf) {
 
 pub fn log_to_cache(message: &str) {
     let path = log_path();    
-    // Rotate old log if too big
     rotate_log_if_needed(&path);
-    // Add a separating blank line if file is not empty (only once per program run)
     ensure_session_newline_once(&path);
     
     let mut file = OpenOptions::new()
@@ -74,8 +72,9 @@ pub fn log_to_cache(message: &str) {
         .append(true)
         .open(&path)
         .unwrap();
-    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
-    let _ = writeln!(file, "[{}] {}", timestamp, message);
+
+    // Don't prepend another timestamp — message is already formatted.
+    let _ = writeln!(file, "{}", message);
 }
 
 pub fn log_message(message: &str) {
