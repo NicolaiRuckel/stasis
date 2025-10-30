@@ -130,7 +130,7 @@ impl ManagerState {
             lock_notify: Arc::new(Notify::new()),
             paused: false,
             previous_brightness: None,
-            pre_suspend_command: None,
+            pre_suspend_command: cfg.pre_suspend_command.clone(),
             resume_queue: Vec::new(),
             resume_commands_fired: false,
             shutdown_flag: Arc::new(Notify::new()),

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 use crate::{config::model::{IdleAction, LidCloseAction, LidOpenAction}, core::manager::{helpers::{run_action, wake_idle_tasks}, Manager}};
@@ -47,6 +47,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
             let mut mgr = manager.lock().await;
             mgr.pause(false).await;
             mgr.trigger_pre_suspend(false).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
         
         Event::Resume => {
