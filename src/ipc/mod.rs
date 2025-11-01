@@ -120,13 +120,13 @@ pub async fn spawn_ipc_socket_with_listener(
 
                                             let response = if currently_inhibited {
                                                 serde_json::json!({
-                                                    "text": "",
+                                                    "text": "Idle Active",
                                                     "alt": "idle_active",
                                                     "tooltip": "Idle inhibition cleared"
                                                 })
                                             } else {
                                                 serde_json::json!({
-                                                    "text": "",
+                                                    "text": "Inhibited",
                                                     "alt": "manually_inhibited",
                                                     "tooltip": "Idle inhibition active"
                                                 })
