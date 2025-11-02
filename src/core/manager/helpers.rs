@@ -364,3 +364,15 @@ pub async fn decr_active_inhibitor(mgr: &mut Manager) {
         ));
     }
 }
+
+pub async fn trigger_pre_suspend(mgr: &mut Manager) {
+    if let Some(cmd) = &mgr.state.pre_suspend_command {
+        log_message(&format!("Running pre-suspend command: {}", cmd));
+
+        // Wait for it to finish (synchronous)
+        match run_command_silent(cmd).await {
+            Ok(_) => log_message("Pre-suspend command finished"),
+            Err(e) => log_message(&format!("Pre-suspend command failed: {}", e)),
+        }
+    }
+}

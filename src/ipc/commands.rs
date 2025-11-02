@@ -5,7 +5,7 @@ use std::{
 use tokio::sync::Mutex;
 
 use crate::{
-    core::manager::{helpers::run_action, Manager},
+    core::manager::{helpers::{run_action, trigger_pre_suspend}, Manager},
     log::log_message,
 };
 
@@ -14,7 +14,7 @@ pub async fn trigger_action_by_name(manager: Arc<Mutex<Manager>>, name: &str) ->
     let mut mgr = manager.lock().await;
 
     if normalized == "pre-suspend" || normalized == "presuspend" {
-        mgr.trigger_pre_suspend(true).await;
+        trigger_pre_suspend(&mut mgr).await;
         return Ok("pre_suspend".to_string());
     }
 

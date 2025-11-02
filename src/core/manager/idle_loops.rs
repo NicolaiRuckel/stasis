@@ -140,7 +140,7 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
                     mgr.state.action_index = 0;
                     mgr.state.lock_state.is_locked = false;
 
-                    mgr.set_post_lock_debounce();
+                    mgr.reset().await;
 
                     log_message("Lockscreen ended — exiting lock watcher");
                     break;

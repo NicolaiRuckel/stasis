@@ -14,7 +14,7 @@ pub use self::state::ManagerState;
 use crate::{
     config::model::{IdleAction, StasisConfig}, 
     core::manager::{
-        actions::{is_process_running, run_command_detached, run_command_silent},
+        actions::{is_process_running, run_command_detached},
         helpers::{restore_brightness, run_action},
     }, 
     log::log_message
@@ -150,11 +150,11 @@ impl Manager {
                     
                     let debounce_end = now + debounce;
                     if self.state.action_index < actions.len() {
-                        actions[self.state.action_index].last_triggered = Some(now); 
+                        actions[self.state.action_index].last_triggered = Some(debounce_end); 
                     } else {
                         // If at the end, reset last_triggered for the last action
                         if lock_index < actions.len() {
-                            actions[lock_index].last_triggered = Some(now);
+                            actions[lock_index].last_triggered = Some(debounce_end);
                         } 
                     }
                     
@@ -328,21 +328,7 @@ impl Manager {
         min_time
     }
 
-    pub async fn trigger_pre_suspend(&mut self, manual: bool) {
-        if !manual {
-            self.state.suspend_occured = true;
-        }
 
-        if let Some(cmd) = &self.state.pre_suspend_command {
-            log_message(&format!("Running pre-suspend command: {}", cmd));
-
-            // Wait for it to finish (synchronous)
-            match run_command_silent(cmd).await {
-                Ok(_) => log_message("Pre-suspend command finished"),
-                Err(e) => log_message(&format!("Pre-suspend command failed: {}", e)),
-            }
-        }
-    }
 
     pub async fn update_power_source(&mut self) {
         match self.state.on_battery() {
@@ -359,27 +345,6 @@ impl Manager {
         log_message("Advancing state past lock stage...");
         self.state.lock_state.post_advanced = true;
         self.state.lock_state.last_advanced = Some(Instant::now());
-    }
-
-    pub fn set_post_lock_debounce(&mut self) {
-        let now = Instant::now();
-        if let Some(cfg) = &self.state.cfg {
-            let debounce = Duration::from_secs(cfg.debounce_seconds as u64);
-            self.state.debounce = Some(now + debounce);
-
-            // Also mark the next action's last_triggered if we're past lock
-            let actions = match self.state.current_block.as_deref() {
-                Some("ac") => &mut self.state.ac_actions,
-                Some("battery") => &mut self.state.battery_actions,
-                _ => &mut self.state.default_actions,
-            };
-
-            if self.state.action_index < actions.len() {
-                actions[self.state.action_index].last_triggered = Some(now);
-            }
-        }
-
-        self.state.notify.notify_one();
     }
 
     pub async fn pause(&mut self, manual: bool) {
