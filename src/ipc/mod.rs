@@ -145,7 +145,7 @@ pub async fn spawn_ipc_socket_with_listener(
                                             loop {
                                                 match manager.try_lock() {
                                                     Ok(mgr) => {
-                                                        let idle_time = mgr.state.last_activity_display.elapsed();
+                                                        let idle_time = mgr.state.last_activity.elapsed();
                                                         let uptime = mgr.state.start_time.elapsed();
                                                         let manually_inhibited = mgr.state.manually_paused;
                                                         let paused = mgr.state.paused;

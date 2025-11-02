@@ -25,7 +25,6 @@ pub struct ManagerState {
     pub instant_actions: Vec<IdleActionBlock>,
     pub instants_triggered: bool,
     pub last_activity: Instant,
-    pub last_activity_display: Instant,
     pub lock_state: LockState,
     pub lock_notify: Arc<Notify>,
     pub manually_paused: bool,
@@ -62,7 +61,6 @@ impl Default for ManagerState {
             instant_actions: Vec::new(),
             instants_triggered: false,
             last_activity: now, 
-            last_activity_display: now,
             lock_state: LockState::default(),
             manually_paused: false,
             max_brightness: None,
@@ -105,7 +103,6 @@ impl ManagerState {
 
         let now = Instant::now();
         let debounce = Some(now + Duration::from_secs(cfg.debounce_seconds as u64));
-        let debounce_duration = Duration::from_secs(cfg.debounce_seconds as u64);
 
         let instant_actions: Vec<_> = default_actions
             .iter()
@@ -136,8 +133,7 @@ impl ManagerState {
             default_actions,
             instant_actions,
             instants_triggered: false,
-            last_activity: now + debounce_duration,
-            last_activity_display: now,
+            last_activity: now,
             lock_state: LockState::from_config(&cfg),
             manually_paused: false,
             max_brightness: None,
@@ -230,8 +226,7 @@ impl ManagerState {
 
         self.cfg = Some(Arc::new(cfg.clone()));
         self.lock_state = LockState::from_config(cfg);
-        self.last_activity = Instant::now() + debounce;
-        self.last_activity_display = Instant::now();
+        self.last_activity = Instant::now();
 
         // Reset action index
         self.action_index = 0;

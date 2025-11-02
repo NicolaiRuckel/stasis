@@ -90,7 +90,7 @@ pub fn spawn_input_task(manager: Arc<Mutex<Manager>>) -> tokio::task::JoinHandle
                     }
                 }
 
-                // Poll with 2-second timeout
+                // Poll with 10-second timeout
                 let mut pollfd = libc::pollfd { fd, events: libc::POLLIN, revents: 0 };
                 let poll_result = unsafe { libc::poll(&mut pollfd as *mut libc::pollfd, 1, 10000) };
                 if poll_result < 0 {
@@ -104,16 +104,36 @@ pub fn spawn_input_task(manager: Arc<Mutex<Manager>>) -> tokio::task::JoinHandle
                     continue;
                 }
 
-                // Only process the **first event** per iteration to reduce CPU
-                if libinput.next().is_some() {
+                // Process events and check if any are actual input activity
+                let mut has_real_input = false;
+                while let Some(event) = libinput.next() {
+                    // Only count these as real input activity
+                    match event {
+                        input::Event::Keyboard(_) | 
+                        input::Event::Pointer(_) | 
+                        input::Event::Touch(_) | 
+                        input::Event::Tablet(_) | 
+                        input::Event::Gesture(_) | 
+                        input::Event::Switch(_) => {
+                            has_real_input = true;
+                        }
+                        // Ignore device add/remove and other non-input events
+                        input::Event::Device(_) => {
+                            // Device add/remove - not real input
+                        }
+                        _ => {
+                            // Other events - not real input
+                        }
+                    }
+                }
+
+                // Only trigger reset if we had actual input
+                if has_real_input {
                     let now = Instant::now();
                     if now.duration_since(last_reset) >= DEBOUNCE {
                         last_reset = now;
                         let _ = tx.send(()); // Notify async task
                     }
-
-                    // Drain remaining events without processing
-                    while libinput.next().is_some() {}
                 }
             }
         });

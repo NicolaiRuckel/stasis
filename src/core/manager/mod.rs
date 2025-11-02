@@ -70,7 +70,7 @@ impl Manager {
                 return;
             }
         };
-        
+
         // Restore brightness if needed
         if self.state.previous_brightness.is_some() {
             if let Err(e) = restore_brightness(&mut self.state).await {
@@ -79,10 +79,9 @@ impl Manager {
         }
         
         let now = Instant::now();
-        self.state.last_activity_display = now;
         let debounce = Duration::from_secs(cfg.debounce_seconds as u64);
         self.state.debounce = Some(now + debounce);
-        self.state.last_activity = now + debounce;
+        self.state.last_activity = now;
 
         // Clear only actions that are before or equal to the current stage
         for actions in [&mut self.state.default_actions, &mut self.state.ac_actions, &mut self.state.battery_actions] {
@@ -173,16 +172,9 @@ impl Manager {
         if self.state.paused || self.state.manually_paused {
             return;
         }
-        
+
         let now = Instant::now();
-        if let Some(until) = self.state.debounce {
-            if now <= until {
-                return;
-            } else {
-                self.state.debounce = None;
-            }
-        }
-        
+
         // Determine which block to use
         let block_name = if !self.state.ac_actions.is_empty() || !self.state.battery_actions.is_empty() {
             match self.state.on_battery() {
@@ -193,12 +185,12 @@ impl Manager {
         } else {
             "default"
         };
-        
+
         // Only update if changed
         if self.state.current_block.as_deref() != Some(block_name) {
             self.state.current_block = Some(block_name.to_string());
         }
-            
+
         // Get reference to the right actions Vec
         let actions = match block_name {
             "ac" => &mut self.state.ac_actions,
@@ -206,52 +198,62 @@ impl Manager {
             "default" => &mut self.state.default_actions,
             _ => unreachable!(),
         };
-        
+
         if actions.is_empty() {
             return;
         }
-        
+
         let index = self.state.action_index.min(actions.len() - 1);
-        
+
         // Skip lock if already locked
-        if matches!(actions[index].kind, crate::config::model::IdleAction::LockScreen) 
-            && self.state.lock_state.is_locked {
+        if matches!(actions[index].kind, IdleAction::LockScreen) && self.state.lock_state.is_locked {
             return;
         }
-        
-        // Calculate elapsed - read the data we need before calling run_action
-        let last_ref = actions[index].last_triggered.unwrap_or(self.state.last_activity);
-        let elapsed = now.duration_since(last_ref);
-        let timeout = actions[index].timeout;
-        
-        if elapsed >= Duration::from_secs(timeout as u64) {
-            // Clone the action to pass to run_action (avoids borrow conflict)
-            let action_clone = actions[index].clone();
-            
-            // Update timing BEFORE running action
-            if index < actions.len() {
-                actions[index].last_triggered = Some(now);
-            }
-            
-            // Advance index
-            self.state.action_index += 1;
-            if self.state.action_index < actions.len() {
-                actions[self.state.action_index].last_triggered = Some(now);
-                self.state.resume_commands_fired = false;
-            } else {
-                self.state.action_index = actions.len() - 1;
-            }
 
-            // Add to resume_queue, except if already queued
-            if matches!(action_clone.kind, IdleAction::LockScreen) {
-                // Do NOT push lock actions to resume_queue
-            } else if action_clone.resume_command.is_some() {
-                self.state.resume_queue.push(action_clone.clone());
+        // Calculate earliest allowed fire time
+        let timeout = Duration::from_secs(actions[index].timeout as u64);
+        let next_fire = if let Some(last_trig) = actions[index].last_triggered {
+            // Already triggered: timeout from when it last fired
+            last_trig + timeout
+        } else if index > 0 {
+            // Not first action: fire relative to previous action
+            if let Some(prev_trig) = actions[index - 1].last_triggered {
+                prev_trig + timeout
+            } else {
+                // Previous hasn't fired yet, shouldn't happen but fallback
+                self.state.last_activity + timeout
             }
-            
-            // Now we can call run_action with full mutable self access
-            run_action(self, &action_clone).await;
+        } else {
+            // First action: apply debounce + timeout from last_activity
+            let base = self.state.debounce.unwrap_or(self.state.last_activity);
+            base + timeout
+        };
+
+        if now < next_fire {
+            // Not ready yet
+            return;
         }
+
+        // Action is ready: clone and mark triggered
+        let action_clone = actions[index].clone();
+        actions[index].last_triggered = Some(now);
+
+        // Advance index
+        self.state.action_index += 1;
+        if self.state.action_index < actions.len() {
+            // Only mark next action triggered after it actually fires
+            self.state.resume_commands_fired = false;
+        } else {
+            self.state.action_index = actions.len() - 1;
+        }
+
+        // Add to resume queue if needed
+        if !matches!(action_clone.kind, IdleAction::LockScreen) && action_clone.resume_command.is_some() {
+            self.state.resume_queue.push(action_clone.clone());
+        }
+
+        // Fire the action
+        run_action(self, &action_clone).await;
     }
 
     pub async fn fire_resume_queue(&mut self) {
@@ -273,6 +275,7 @@ impl Manager {
         self.state.resume_queue.clear();
     }
 
+
     pub fn next_action_instant(&self) -> Option<Instant> {
         if self.state.paused || self.state.manually_paused {
             return None;
@@ -291,19 +294,30 @@ impl Manager {
 
         let mut min_time: Option<Instant> = None;
 
-        for action in actions.iter() {
+        for (i, action) in actions.iter().enumerate() {
             // Skip lock if already locked
             if matches!(action.kind, IdleAction::LockScreen) && self.state.lock_state.is_locked {
                 continue;
             }
 
-            let last = action.last_triggered.unwrap_or(self.state.last_activity);
-            let mut next_time = last + Duration::from_secs(action.timeout as u64);
-
-            // Respect debounce
-            if let Some(debounce_end) = self.state.debounce {
-                next_time = next_time.max(debounce_end);
-            }
+            // Calculate next fire time for this action
+            let timeout = Duration::from_secs(action.timeout as u64);
+            let next_time = if let Some(last_trig) = action.last_triggered {
+                // Already triggered: timeout from when it last fired
+                last_trig + timeout
+            } else if i > 0 {
+                // Not first action: fire relative to previous action
+                if let Some(prev_trig) = actions[i - 1].last_triggered {
+                    prev_trig + timeout
+                } else {
+                    // Previous hasn't fired yet, shouldn't happen but fallback
+                    self.state.last_activity + timeout
+                }
+            } else {
+                // First action: use debounce + timeout
+                let base = self.state.debounce.unwrap_or(self.state.last_activity);
+                base + timeout
+            };
 
             min_time = Some(match min_time {
                 None => next_time,
