@@ -1,7 +1,10 @@
-use std::sync::Arc;
+use std::{process::Command, sync::Arc};
 use eyre::Result;
+use futures_util::stream::StreamExt;
 use mpris::{PlayerFinder, PlaybackStatus};
 use tokio::task;
+use zbus::{Connection, MatchRule, MessageStream};
+
 use crate::core::manager::{helpers::{decr_active_inhibitor, incr_active_inhibitor}, Manager};
 
 const IGNORED_PLAYERS: &[&str] = &[
@@ -9,14 +12,7 @@ const IGNORED_PLAYERS: &[&str] = &[
     "Spotify Connect", "spotifyd", "vlc-http", "plexamp", "bluez",
 ];
 
-// Event-driven media monitoring using D-Bus signals
-use zbus::{Connection, MatchRule, MessageStream};
-use futures_util::stream::StreamExt;
-
-pub async fn spawn_media_monitor_dbus(
-    manager: Arc<tokio::sync::Mutex<Manager>>,
-    ignore_remote_media: bool,
-) -> Result<()> {
+pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>) -> Result<()> {
     task::spawn(async move {
         let conn = match Connection::session().await {
             Ok(c) => c,
@@ -25,8 +21,7 @@ pub async fn spawn_media_monitor_dbus(
                 return;
             }
         };
-        
-        // Create match rule for MPRIS PropertiesChanged signals
+
         let rule = MatchRule::builder()
             .msg_type(zbus::message::Type::Signal)
             .interface("org.freedesktop.DBus.Properties")
@@ -36,37 +31,43 @@ pub async fn spawn_media_monitor_dbus(
             .path_namespace("/org/mpris/MediaPlayer2")
             .unwrap()
             .build();
-        
-        // Subscribe to matching signals
-        let mut stream = MessageStream::for_match_rule(
-            rule,
-            &conn,
-            None, // No message queue size limit
-        ).await.unwrap();
-        
-        let mut media_playing = false;
-        
-        // Also do an initial check
-        let any_playing = check_media_playing(ignore_remote_media);
-        if any_playing {
-            let mut mgr = manager.lock().await;
-            mgr.pause(false).await;
-            media_playing = true;
-        }
-        
-        loop {
-            // Wait for D-Bus signal - 0% CPU while waiting!
-            if let Some(_msg) = stream.next().await {
-                // Check all players when we get a PropertiesChanged signal
-                let any_playing = check_media_playing(ignore_remote_media);
-                
+
+        let mut stream = MessageStream::for_match_rule(rule, &conn, None).await.unwrap();
+
+        // Initial check
+        {
+            let ignore_remote_media = {
+                let mgr = manager.lock().await;
+                mgr.state.cfg.as_ref().map(|c| c.ignore_remote_media).unwrap_or(false)
+            };
+
+            let playing = check_media_playing(ignore_remote_media);
+            if playing {
+                // use manager helper to ensure consistent side-effects/logging
                 let mut mgr = manager.lock().await;
-                if any_playing && !media_playing {
+                if !mgr.state.media_playing {
                     incr_active_inhibitor(&mut mgr).await;
-                    media_playing = true;
-                } else if !any_playing && media_playing {
+                    mgr.state.media_playing = true;
+                }
+            }
+        }
+
+        loop {
+            if let Some(_msg) = stream.next().await {
+                let ignore_remote_media = {
+                    let mgr = manager.lock().await;
+                    mgr.state.cfg.as_ref().map(|c| c.ignore_remote_media).unwrap_or(false)
+                };
+
+                let any_playing = check_media_playing(ignore_remote_media);
+
+                let mut mgr = manager.lock().await;
+                if any_playing && !mgr.state.media_playing {
+                    incr_active_inhibitor(&mut mgr).await;
+                    mgr.state.media_playing = true;
+                } else if !any_playing && mgr.state.media_playing {
                     decr_active_inhibitor(&mut mgr).await;
-                    media_playing = false;
+                    mgr.state.media_playing = false;
                 }
             }
         }
@@ -74,8 +75,9 @@ pub async fn spawn_media_monitor_dbus(
     Ok(())
 }
 
-fn check_media_playing(ignore_remote_media: bool) -> bool {
-    match PlayerFinder::new() {
+pub fn check_media_playing(ignore_remote_media: bool) -> bool {
+    // Step 1: Check MPRIS players
+    let mpris_playing = match PlayerFinder::new() {
         Ok(finder) => match finder.find_all() {
             Ok(players) => players.iter().any(|player| {
                 let identity = player.identity();
@@ -83,9 +85,9 @@ fn check_media_playing(ignore_remote_media: bool) -> bool {
                 let is_playing = player.get_playback_status()
                     .map(|s| s == PlaybackStatus::Playing)
                     .unwrap_or(false);
-                
+
                 if !is_playing { return false; }
-                
+
                 if ignore_remote_media {
                     !IGNORED_PLAYERS.iter().any(|s| identity.contains(s) || bus_name.contains(s))
                 } else {
@@ -95,6 +97,27 @@ fn check_media_playing(ignore_remote_media: bool) -> bool {
             Err(_) => false,
         },
         Err(_) => false,
+    };
+
+    if !mpris_playing {
+        return false;
     }
+
+    if ignore_remote_media {
+        check_local_audio()
+    } else {
+        true
+    }
+}
+
+fn check_local_audio() -> bool {
+    let output = match Command::new("pactl").args(["list", "sink-inputs"]).output() {
+        Ok(o) => o,
+        Err(_) => return false, // can't detect audio, assume none
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    stdout.lines().any(|line| line.contains("State: RUNNING"))
 }
 

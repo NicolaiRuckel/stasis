@@ -252,7 +252,7 @@ async fn main() -> Result<()> {
    
     // --- Spawn media monitor task ---
     if cfg.monitor_media {
-        if let Err(e) = spawn_media_monitor_dbus(Arc::clone(&manager), cfg.ignore_remote_media).await {
+        if let Err(e) = spawn_media_monitor_dbus(Arc::clone(&manager)).await {
             log_error_message(&format!("Failed to spawn media monitor: {}", e));
         }
     }

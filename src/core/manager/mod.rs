@@ -360,6 +360,27 @@ impl Manager {
         }
     }
 
+    pub async fn recheck_media(&mut self) {
+        // read ignore_remote_media from cfg
+        let ignore_remote = match &self.state.cfg {
+            Some(cfg) => cfg.ignore_remote_media,
+            None => false,
+        };
+
+        // sync check (pactl + mpris). This is blocking but fine here.
+        let playing = crate::core::services::media::check_media_playing(ignore_remote);
+
+        // Only change state via the helpers so behaviour stays consistent:
+        if playing && !self.state.media_playing {
+            // call the same helper the monitor uses
+            crate::core::manager::helpers::incr_active_inhibitor(self).await;
+            self.state.media_playing = true;
+        } else if !playing && self.state.media_playing {
+            crate::core::manager::helpers::decr_active_inhibitor(self).await;
+            self.state.media_playing = false;
+        }
+    }
+
     pub async fn shutdown(&mut self) {
         self.state.shutdown_flag.notify_waiters();
 
