@@ -156,6 +156,23 @@ pub fn load_config() -> Result<StasisConfig> {
         .or_else(|_| config.get::<bool>("stasis.ignore-remote-media"))
         .unwrap_or(true);
 
+    let media_blacklist: Vec<String> = config
+        .get_value("stasis.media_blacklist")
+        .or_else(|_| config.get_value("stasis.media-blacklist"))
+        .ok()
+        .and_then(|v| match v {
+            Value::Array(arr) => Some(
+                arr.iter()
+                    .filter_map(|v| match v {
+                        Value::String(s) => Some(s.to_lowercase()),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default();
+
     let respect_wayland_inhibitors = config
         .get::<bool>("stasis.respect_wayland_inhibitors")
         .or_else(|_| config.get::<bool>("stasis.respect-wayland-inhibitors"))
@@ -260,6 +277,10 @@ pub fn load_config() -> Result<StasisConfig> {
     log_message(&format!("  pre_suspend_command = {:?}", pre_suspend_command));
     log_message(&format!("  monitor_media = {:?}", monitor_media));
     log_message(&format!("  ignore_remote_media = {:?}", ignore_remote_media));
+    log_message(&format!(
+        "  media_blacklist = [{}]",
+        media_blacklist.join(", ")
+    ));
     log_message(&format!("  respect_wayland_inhibitors = {:?}", respect_wayland_inhibitors));
     log_message(&format!("  debounce_seconds = {:?}", debounce_seconds));
     log_message(&format!("  lid_close_action = {:?}", lid_close_action));
@@ -284,6 +305,7 @@ pub fn load_config() -> Result<StasisConfig> {
         actions,
         pre_suspend_command,
         monitor_media,
+        media_blacklist, 
         ignore_remote_media,
         respect_wayland_inhibitors,
         inhibit_apps,

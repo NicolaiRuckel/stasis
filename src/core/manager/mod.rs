@@ -361,14 +361,14 @@ impl Manager {
     }
 
     pub async fn recheck_media(&mut self) {
-        // read ignore_remote_media from cfg
-        let ignore_remote = match &self.state.cfg {
-            Some(cfg) => cfg.ignore_remote_media,
-            None => false,
+        // read ignore_remote_media + media blacklist from cfg
+        let (ignore_remote, media_blacklist) = match &self.state.cfg {
+            Some(cfg) => (cfg.ignore_remote_media, cfg.media_blacklist.clone()),
+            None => (false, Vec::new()),
         };
 
         // sync check (pactl + mpris). This is blocking but fine here.
-        let playing = crate::core::services::media::check_media_playing(ignore_remote);
+        let playing = crate::core::services::media::check_media_playing(ignore_remote, &media_blacklist);
 
         // Only change state via the helpers so behaviour stays consistent:
         if playing && !self.state.media_playing {

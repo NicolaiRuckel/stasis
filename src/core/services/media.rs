@@ -36,12 +36,14 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
 
         // Initial check
         {
-            let ignore_remote_media = {
+            let (ignore_remote_media, media_blacklist) = {
                 let mgr = manager.lock().await;
-                mgr.state.cfg.as_ref().map(|c| c.ignore_remote_media).unwrap_or(false)
+                let ignore = mgr.state.cfg.as_ref().map(|c| c.ignore_remote_media).unwrap_or(false);
+                let blacklist = mgr.state.cfg.as_ref().map(|c| c.media_blacklist.clone()).unwrap_or_default();
+                (ignore, blacklist)
             };
 
-            let playing = check_media_playing(ignore_remote_media);
+            let playing = check_media_playing(ignore_remote_media, &media_blacklist);
             if playing {
                 // use manager helper to ensure consistent side-effects/logging
                 let mut mgr = manager.lock().await;
@@ -54,12 +56,14 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
 
         loop {
             if let Some(_msg) = stream.next().await {
-                let ignore_remote_media = {
+                let (ignore_remote_media, media_blacklist) = {
                     let mgr = manager.lock().await;
-                    mgr.state.cfg.as_ref().map(|c| c.ignore_remote_media).unwrap_or(false)
+                    let ignore = mgr.state.cfg.as_ref().map(|c| c.ignore_remote_media).unwrap_or(false);
+                    let blacklist = mgr.state.cfg.as_ref().map(|c| c.media_blacklist.clone()).unwrap_or_default();
+                    (ignore, blacklist)
                 };
 
-                let any_playing = check_media_playing(ignore_remote_media);
+                let any_playing = check_media_playing(ignore_remote_media, &media_blacklist);
 
                 let mut mgr = manager.lock().await;
                 if any_playing && !mgr.state.media_playing {
@@ -75,49 +79,70 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
     Ok(())
 }
 
-pub fn check_media_playing(ignore_remote_media: bool) -> bool {
-    // Step 1: Check MPRIS players
-    let mpris_playing = match PlayerFinder::new() {
+pub fn check_media_playing(ignore_remote_media: bool, media_blacklist: &[String]) -> bool {
+    // Step 1: Check if ANY MPRIS player is playing (filter blacklist and remote)
+    let any_mpris_playing = match PlayerFinder::new() {
         Ok(finder) => match finder.find_all() {
-            Ok(players) => players.iter().any(|player| {
-                let identity = player.identity();
-                let bus_name = player.bus_name().to_string();
-                let is_playing = player.get_playback_status()
-                    .map(|s| s == PlaybackStatus::Playing)
-                    .unwrap_or(false);
-
-                if !is_playing { return false; }
-
-                if ignore_remote_media {
-                    !IGNORED_PLAYERS.iter().any(|s| identity.contains(s) || bus_name.contains(s))
-                } else {
-                    true
-                }
-            }),
+            Ok(players) => {
+                players.iter().any(|player| {
+                    let is_playing = player.get_playback_status()
+                        .map(|s| s == PlaybackStatus::Playing)
+                        .unwrap_or(false);
+                    
+                    if !is_playing {
+                        return false;
+                    }
+                    
+                    let identity = player.identity().to_lowercase();
+                    let bus_name = player.bus_name().to_string().to_lowercase();
+                    
+                    // Check blacklist first (applies regardless of ignore_remote_media)
+                    if media_blacklist.iter().any(|b| identity.contains(b) || bus_name.contains(b)) {
+                        return false;
+                    }
+                    
+                    // If ignore_remote_media is true, also filter remote players
+                    if ignore_remote_media {
+                        let is_remote = IGNORED_PLAYERS.iter().any(|s| {
+                            let s_lower = s.to_lowercase();
+                            identity.contains(&s_lower) || bus_name.contains(&s_lower)
+                        });
+                        !is_remote
+                    } else {
+                        true
+                    }
+                })
+            },
             Err(_) => false,
         },
         Err(_) => false,
     };
 
-    if !mpris_playing {
+    // If no MPRIS player is playing at all, return false
+    if !any_mpris_playing {
         return false;
     }
 
+    // Step 2: If we're ignoring remote media, verify local audio is actually playing
     if ignore_remote_media {
         check_local_audio()
     } else {
+        // If we're not filtering remote media, any MPRIS player is enough
         true
     }
 }
 
 fn check_local_audio() -> bool {
-    let output = match Command::new("pactl").args(["list", "sink-inputs"]).output() {
+    // Small delay to allow sink state to update after MPRIS detection
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    
+    let output = match Command::new("pactl").args(["list", "sinks", "short"]).output() {
         Ok(o) => o,
-        Err(_) => return false, // can't detect audio, assume none
+        Err(_) => return false,
     };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-
-    stdout.lines().any(|line| line.contains("State: RUNNING"))
+    
+    // Check if any sink is in RUNNING state
+    stdout.lines().any(|line| line.to_uppercase().contains("RUNNING"))
 }
-
