@@ -346,7 +346,15 @@ impl LockState {
         // Find the first LockScreen action (there should usually be one)
         let lock_action = cfg.actions.iter().find(|a| a.kind == IdleAction::LockScreen);
 
-        let command = lock_action.map(|a| a.command.clone());
+        let command = lock_action.map(|a| {
+            // If lock_command is set, use "loginctl lock-session"
+            // Otherwise use the action's command (hyprlock or whatever)
+            if a.lock_command.is_some() {
+                "loginctl lock-session".to_string()
+            } else {
+                a.command.clone()
+            }
+        });
 
         Self {
             is_locked: false,
