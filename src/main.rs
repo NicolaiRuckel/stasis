@@ -197,6 +197,11 @@ async fn main() -> Result<()> {
     let listener = UnixListener::bind(SOCKET_PATH).map_err(|_| {
         eyre::eyre!("Failed to bind control socket. Another instance may be running.")
     })?;
+
+    // --- Ensure user config exists ---
+    if let Err(e) = config::bootstrap::ensure_user_config_exists() {
+        eprintln!("Could not initialize config: {}", e);
+    }
     
     // --- Load config ---
     if args.verbose {

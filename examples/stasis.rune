@@ -84,7 +84,7 @@ stasis:
   on_battery:
     custom-brightness-instant:
       timeout 0
-      command "brightnessctl set 100%"
+      command "brightnessctl set 40%"
     end
 
     lock_screen:

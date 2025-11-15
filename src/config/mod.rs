@@ -1,6 +1,7 @@
 use std::{path::PathBuf};
 use eyre::Result;
 
+pub mod bootstrap;
 pub mod info;
 pub mod model;
 pub mod parser;
