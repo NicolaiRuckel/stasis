@@ -159,10 +159,7 @@ install -Dm755 target/release/stasis ~/.local/bin/stasis
 ## 🚀 Quick Start
 
 Get up and running in just a few minutes!  
-See the [Quick Start Guide](https://github.com/saltnpepper97/stasis/wiki#quick-start) in the Wiki for setup instructions, including how to ensure your user is in the `input` group.
-
-
-For configuration examples, CLI options, and advanced usage, visit the [full documentation](https://github.com/saltnpepper97/stasis/wiki).
+See the [webpage](https://saltnpepper97.github.io/stasis/) for quick start instructions, including how to ensure your user is in the `input` group and much more!
 
 ## Compositor Support
 
