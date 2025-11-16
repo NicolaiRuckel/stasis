@@ -11,7 +11,6 @@ const config = {
       assets: 'build'
     }),
 
-    // Use import.meta.env.MODE instead of process.env.NODE_ENV to avoid errors
     paths: {
       base: '/stasis'
     },

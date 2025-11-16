@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { base } from '$app/paths';
   
   type Theme = 'auto' | 'light' | 'dark';
   let theme: Theme = 'auto';
@@ -63,15 +64,15 @@
 
 <div class="topbar">
   <div class="brand">
-    <span><a class="title" href="/">Stasis</a></span>
+    <span><a class="title" href="{base}/">Stasis</a></span>
   </div>
   <nav>
     <ul>
-      <li><a href="/quick-start">Quick Start</a></li>
-      <li><a href="/configuration">Configuration</a></li>
-      <li><a href="/integration">Integration</a></li>
-      <li><a href="/contributing">Contributing</a></li>
-      <li><a href="/faq">FAQ</a></li>
+      <li><a href="{base}/quick-start">Quick Start</a></li>
+      <li><a href="{base}/configuration">Configuration</a></li>
+      <li><a href="{base}/integration">Integration</a></li>
+      <li><a href="{base}/contributing">Contributing</a></li>
+      <li><a href="{base}/faq">FAQ</a></li>
     </ul>
   </nav>
   <div class="links">
