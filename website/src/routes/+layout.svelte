@@ -8,7 +8,7 @@
   import { afterNavigate } from '$app/navigation';
   import { page } from '$app/state';
   import { base } from '$app/paths';
-
+  
   let { children } = $props();
   
   let isSidebarOpen = $state(false);
@@ -44,7 +44,7 @@
 </script>
 
 <svelte:head>
-  <link rel="icon" type="image/png" href={base + '/favicon.png'} />
+  <link rel="icon" href="{base}/favicon.png" type="image/png" sizes="32x32" />
 </svelte:head>
 
 <div class="layout">
