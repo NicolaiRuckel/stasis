@@ -222,7 +222,7 @@ cd stasis`;
 
       <div class="info">
         <strong>💬 Questions?</strong>
-        <p>Don't hesitate to ask! Join the <a href="https://discord.gg/your-invite" target="_blank" rel="noopener noreferrer">Discord community</a> or open a discussion on GitHub. We're a friendly bunch and happy to help newcomers!</p>
+        <p>Don't hesitate to ask! Join the <a href="https://discord.gg/Qjsd8MjP" target="_blank" rel="noopener noreferrer">Discord community</a> or open a discussion on GitHub. We're a friendly bunch and happy to help newcomers!</p>
       </div>
     </section>
   </main>
