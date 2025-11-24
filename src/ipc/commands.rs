@@ -56,8 +56,16 @@ pub async fn trigger_action_by_name(manager: Arc<Mutex<Manager>>, name: &str) ->
 
     let action_opt = block.iter().find(|a| {
         let kind_name = format!("{:?}", a.kind).to_lowercase().replace('_', "-");
+        let kind_name_no_hyphen = kind_name.replace('-', "");
+        let search_name_no_hyphen = search_name.replace('-', "");
         let stripped_name = strip_action_prefix(&a.name).to_lowercase();
-        kind_name == search_name || stripped_name == search_name || a.name.to_lowercase() == search_name
+        let stripped_name_no_hyphen = stripped_name.replace('-', "");
+        
+        kind_name == search_name 
+            || kind_name_no_hyphen == search_name_no_hyphen
+            || stripped_name == search_name 
+            || stripped_name_no_hyphen == search_name_no_hyphen
+            || a.name.to_lowercase() == search_name
     });
 
     let action = match action_opt {
