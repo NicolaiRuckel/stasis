@@ -1,0 +1,15 @@
+[Unit]
+Description=Stasis Wayland Idle Manager
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+ExecStart=/usr/bin/stasis
+Slice=session.slice
+Restart=on-failure
+TimeoutStopSec=5s
+
+[Install]
+WantedBy=graphical-session.target
+

@@ -64,16 +64,14 @@
   
   const systemdServiceCode = `[Unit]
 Description=Stasis Wayland Idle Manager
-After=graphical.target
+After=default.target
+ConditionEnvironment=WAYLAND_DISPLAY
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/stasis
+Environment="PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=$HOME/.local/bin/stasis
 Restart=on-failure
-
-# Optional: ensure environment variables for Wayland are loaded
-ExecStartPre=/usr/bin/systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-ExecStartPre=/bin/sh -c 'until [ -n "$WAYLAND_DISPLAY" ]; do sleep 0.5; done'
 
 [Install]
 WantedBy=default.target`; 
@@ -174,17 +172,33 @@ systemctl --user enable --now stasis.service`;
         The recommended way to run Stasis is as a systemd user service. This ensures 
         Stasis starts automatically with your graphical session and restarts if it crashes.
       </p>
+
+      <h3>Provided Service File</h3>
+      <p>
+        Stasis already provides a service file if you installed it via the AUR on Arch Linux
+        To start the service file with your desired compositor first enable it using:
+      </p>
+
+      <CodeBlock code="systemctl --user enable stasis.service" />
+
+      <p>
+        Then you can start Stasis via your compositors autostart section using the 
+        following:
+      </p>
+
+      <CodeBlock code="systemctl --user start stasis" />
       
       <h3>Create the Service File</h3>
       <p>
+        If you installed Stasis manually and want to create a user only service file in your home directory,
         Create a service file at <code>~/.config/systemd/user/stasis.service</code> with this content:
       </p>
       
       <CodeBlock code={systemdServiceCode} language="ini" />
       
       <div class="note">
-        <strong>Path Note:</strong> The service files use <code>/usr/bin/stasis</code> as the default path. 
-        If you installed Stasis to a different location (e.g., <code>~/.local/bin/stasis</code>), 
+        <strong>Path Note:</strong> The service file above assumes Stasis is installed in <code>$HOME/.local/bin/stasis</code>. 
+        If you installed Stasis to a different location (e.g., <code>~/.cargo/bin/stasis</code>), 
         update the <code>ExecStart=</code> line accordingly.
       </div>
       
