@@ -44,7 +44,7 @@
 </script>
 
 <svelte:head>
-  <link rel="icon" href="{base}/favicon.png" type="image/png" />
+  <link rel="icon" href="{base}/favicon.ico" />
 </svelte:head>
 
 <div class="layout">

@@ -6,9 +6,10 @@
   
   const sections = [
     { id: 'prerequisites', title: 'Prerequisites' },
-    { id: 'input-group', title: 'Input Group Setup' },
+    { id: 'group-setup', title: 'Group Setup' },
     { id: 'manual', title: 'Running Manually' },
-    { id: 'systemd', title: 'Systemd Service' }
+    { id: 'systemd', title: 'Systemd Service' },
+    { id: 'troubleshooting', title: 'Troubleshooting' }
   ];
   
   onMount(() => {
@@ -64,22 +65,29 @@
   const systemdServiceCode = `[Unit]
 Description=Stasis Wayland Idle Manager
 After=graphical-session.target
-Wants=graphical-session.target
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/stasis
-Restart=always
-RestartSec=5
-Environment=WAYLAND_DISPLAY=wayland-0
-# Optional: wait until WAYLAND_DISPLAY exists
-ExecStartPre=/bin/sh -c 'while [ ! -e /run/user/%U/wayland-0 ]; do sleep 0.1; done'
+ExecStart=/usr/bin/stasis
+Restart=on-failure
+RestartSec=3
+
+# Import environment variables from the user session
+ExecStartPre=/usr/bin/systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+ExecStartPre=/bin/sh -c 'until [ -n "$WAYLAND_DISPLAY" ]; do sleep 0.5; done'
 
 [Install]
-WantedBy=default.target`;
+WantedBy=graphical-session.target`;
   
-  const enableServiceCode = `systemctl --user enable stasis.service
-systemctl --user start stasis.service`;
+  const enableServiceCode = `# Reload systemd to recognize the new service
+systemctl --user daemon-reload
+
+# Enable and start the service
+systemctl --user enable --now stasis.service
+
+# Check the service status
+systemctl --user status stasis.service`;
 </script>
 
 <div class="page-container">
@@ -105,58 +113,156 @@ systemctl --user start stasis.service`;
     <section id="prerequisites">
       <h2>Prerequisites</h2>
       <div class="warning">
-        <strong>⚠️ Important:</strong> Before running Stasis, you must be part of the <code>input</code> group.
+        <strong>⚠️ Required:</strong> Before running Stasis, you must configure the proper user groups:
+        <ul>
+          <li><strong>All users:</strong> Must be in the <code>input</code> group</li>
+          <li><strong>Laptop users:</strong> Must also be in the <code>video</code> group (for brightness control)</li>
+        </ul>
       </div>
+      
+      <p>
+        Stasis requires access to input devices to monitor idle activity and brightness controls on laptops.
+        Without these group memberships, Stasis will fail to start or function properly.
+      </p>
     </section>
     
-    <section id="input-group">
-      <h2>Input Group Setup</h2>
-      <p>Check if you're already in the input group:</p>
+    <section id="group-setup">
+      <h2>Group Setup</h2>
+      
+      <h3>Check Current Groups</h3>
+      <p>First, check which groups you're currently in:</p>
       <CodeBlock code="groups $USER" />
       
       <p>You should see output like:</p>
-      <CodeBlock code="dustin : dustin wheel audio input storage video" />
+      <CodeBlock code="dustin : dustin wheel audio input video storage" />
       
-      <p>If <code>input</code> is missing, add yourself to the group:</p>
+      <h3>Add Missing Groups</h3>
+      <p>If <code>input</code> is missing, add yourself:</p>
       <CodeBlock code="sudo usermod -aG input $USER" />
       
-      <p class="note">
-        <strong>Note:</strong> You'll need to log out and back in or restart your computer for group changes to take effect.
-      </p>
+      <p>If you're on a laptop and <code>video</code> is missing, add it as well:</p>
+      <CodeBlock code="sudo usermod -aG video $USER" />
+      
+      <p>Or add both at once:</p>
+      <CodeBlock code="sudo usermod -aG input,video $USER" />
+      
+      <div class="warning">
+        <strong>⚠️ Important:</strong> After adding groups, you must log out and log back in (or restart your computer) for the changes to take effect. The service will not work until you do this.
+      </div>
+      
+      <p>After logging back in, verify the groups were added:</p>
+      <CodeBlock code="groups $USER" />
 
-      <p class="note">
-        <strong>Note:</strong> On first run, Stasis automatically generates a configuration file at 
+      <div class="note">
+        <strong>📝 Note:</strong> On first run, Stasis automatically generates a configuration file at 
         <code>$XDG_CONFIG_HOME/stasis/stasis.rune</code> (typically <code>~/.config/stasis/stasis.rune</code>).
-      </p>
+      </div>
     </section>
     
     <section id="manual">
       <h2>Running Manually</h2>
       <p>
-        Stasis must be started from within a running Wayland session. 
-        Simply run:
+        For testing purposes, you can run Stasis directly from the command line. 
+        Make sure you're in a running Wayland session, then simply run:
       </p>
       <CodeBlock code="stasis" />
       
       <p>
-        This is useful for testing, but for daily use we recommend setting up 
-        the systemd service below.
+        This is useful for testing your configuration, but for daily use we strongly 
+        recommend setting up the systemd service below for automatic startup.
       </p>
     </section>
     
     <section id="systemd">
       <h2>Systemd Service (Recommended)</h2>
       <p>
-        For automatic startup, create a systemd user service at 
-        <code>~/.config/systemd/user/stasis.service</code>:
+        The recommended way to run Stasis is as a systemd user service. This ensures 
+        Stasis starts automatically with your graphical session and restarts if it crashes.
+      </p>
+      
+      <h3>Create the Service File</h3>
+      <p>
+        Create a service file at <code>~/.config/systemd/user/stasis.service</code> with the following content:
       </p>
       <CodeBlock code={systemdServiceCode} language="ini" />
       
-      <p>Enable and start the service:</p>
+      <div class="note">
+        <strong>📝 Path Note:</strong> The service file uses <code>/usr/bin/stasis</code> as the default path. 
+        If you installed Stasis to a different location (e.g., <code>~/.local/bin/stasis</code>), 
+        update the <code>ExecStart=</code> line accordingly.
+      </div>
+      
+      <h3>Enable and Start</h3>
+      <p>Enable and start the service with these commands:</p>
       <CodeBlock code={enableServiceCode} language="bash" />
       
-      <p>Check the service status:</p>
-      <CodeBlock code="systemctl --user status stasis.service" />
+      <p>
+        If the service is running correctly, you should see <code>Active: active (running)</code> 
+        in the status output.
+      </p>
+    </section>
+    
+    <section id="troubleshooting">
+      <h2>Troubleshooting</h2>
+      
+      <h3>Service stuck in "activating" state</h3>
+      <p>
+        This usually means the <code>WAYLAND_DISPLAY</code> environment variable isn't available yet. 
+        The service file includes a wait condition, but if issues persist:
+      </p>
+      <CodeBlock code="echo $WAYLAND_DISPLAY
+ls -la /run/user/$(id -u)/wayland-*" />
+      <p>
+        Make sure your compositor has started and the Wayland socket exists before starting Stasis.
+      </p>
+      
+      <h3>Service fails with exit code 203 (EXEC)</h3>
+      <p>
+        This means systemd can't execute the binary. Common causes:
+      </p>
+      <ul>
+        <li>The binary doesn't exist at the specified path</li>
+        <li>The binary isn't executable (<code>chmod +x</code> may be needed)</li>
+        <li>The path in <code>ExecStart=</code> is wrong</li>
+      </ul>
+      <p>Verify the binary location and update the service file:</p>
+      <CodeBlock code="which stasis
+# Then update ExecStart= in the service file to match" />
+      
+      <h3>Brightness controls (brightnessctl/light) stop working</h3>
+      <p>
+        This is usually caused by missing environment variables. The updated service file 
+        imports all necessary environment variables from your session. If issues persist:
+      </p>
+      <ul>
+        <li>Make sure you're in the <code>video</code> group</li>
+        <li>Restart the service after editing: <code>systemctl --user restart stasis.service</code></li>
+        <li>Check logs for errors: <code>journalctl --user -u stasis.service -f</code></li>
+      </ul>
+      
+      <h3>Permission denied errors</h3>
+      <p>
+        If you see permission errors in the logs:
+      </p>
+      <ul>
+        <li>Verify you're in the required groups: <code>groups $USER</code></li>
+        <li>Make sure you logged out and back in after adding groups</li>
+        <li>Check that <code>/dev/input/*</code> devices are accessible</li>
+      </ul>
+      
+      <h3>Starting from compositor config vs systemd</h3>
+      <p>
+        You can start Stasis from your compositor configuration instead of systemd, 
+        but <strong>not both at the same time</strong>. If using compositor startup:
+      </p>
+      <CodeBlock code={`# Hyprland example:
+exec-once = sleep 2 && stasis
+
+# Niri example:
+spawn-at-startup "sh" "-c" "sleep 2 && stasis"`} />
+      <p>
+        The <code>sleep 2</code> gives the compositor time to fully initialize its environment.
+      </p>
     </section>
   </main>
 </div>
@@ -239,6 +345,13 @@ systemctl --user start stasis.service`;
     color: var(--text-primary);
     scroll-margin-top: 120px;
   }
+  
+  h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 32px 0 12px 0;
+    color: var(--text-primary);
+  }
  
   section {
     margin-bottom: 48px;
@@ -251,12 +364,27 @@ systemctl --user start stasis.service`;
     margin: 16px 0;
   }
   
+  ul {
+    line-height: 1.7;
+    color: var(--text-primary);
+    margin: 16px 0;
+    padding-left: 24px;
+  }
+  
+  li {
+    margin: 8px 0;
+  }
+  
   .warning {
     background: rgba(255, 193, 7, 0.1);
     border-left: 4px solid #ffc107;
     padding: 16px;
     margin: 24px 0;
     border-radius: 4px;
+  }
+  
+  .warning ul {
+    margin: 8px 0 0 0;
   }
   
   .note {
@@ -328,6 +456,11 @@ systemctl --user start stasis.service`;
       scroll-margin-top: 100px;
     }
     
+    h3 {
+      font-size: 1.15rem;
+      margin: 24px 0 10px 0;
+    }
+    
     section {
       margin-bottom: 32px;
       scroll-margin-top: 100px;
@@ -368,6 +501,10 @@ systemctl --user start stasis.service`;
     
     h2 {
       font-size: 1.25rem;
+    }
+    
+    h3 {
+      font-size: 1.1rem;
     }
   }
 </style>
