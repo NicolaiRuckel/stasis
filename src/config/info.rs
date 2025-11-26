@@ -77,6 +77,7 @@ impl StasisConfig {
             } else {
                 "Desktop"
             };
+            
             // Print group header only once
             if seen_groups.insert(group) {
                 out.push_str(&format!("  [{}]\n", group));
@@ -88,24 +89,27 @@ impl StasisConfig {
                 .or_else(|| action.name.strip_prefix("battery."))
                 .unwrap_or(&action.name);
             
-            out.push_str(&format!(
-                "    {}. {:<18} Timeout={} Kind={} Command=\"{}\"",
-                action_counter,
-                display_name,
-                action.timeout,
-                action.kind,
-                action.command
-            ));
+            // Action number and name
+            out.push_str(&format!("    {}. {}\n", action_counter, display_name));
+            
+            // Aligned key-value pairs
+            out.push_str(&format!("       Timeout        : {}\n", action.timeout));
+            out.push_str(&format!("       Kind           : {}\n", action.kind));
+            out.push_str(&format!("       Command        : \"{}\"\n", action.command));
+            
             if let Some(lock_cmd) = &action.lock_command {
-                out.push_str(&format!(" LockCommand=\"{}\"", lock_cmd));
+                out.push_str(&format!("       LockCommand    : \"{}\"\n", lock_cmd));
             }
             if let Some(resume_cmd) = &action.resume_command {
-                out.push_str(&format!(" ResumeCommand=\"{}\"", resume_cmd));
+                out.push_str(&format!("       ResumeCommand  : \"{}\"\n", resume_cmd));
             }
+            
+            // Blank line between actions for readability
             out.push('\n');
             
             action_counter += 1;
         }
+        
         out
     }
 }
