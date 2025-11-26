@@ -50,6 +50,7 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
                 if !mgr.state.media_playing {
                     incr_active_inhibitor(&mut mgr).await;
                     mgr.state.media_playing = true;
+                    mgr.state.media_blocking = true;
                 }
             }
         }
@@ -69,9 +70,11 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
                 if any_playing && !mgr.state.media_playing {
                     incr_active_inhibitor(&mut mgr).await;
                     mgr.state.media_playing = true;
+                    mgr.state.media_blocking = true;
                 } else if !any_playing && mgr.state.media_playing {
                     decr_active_inhibitor(&mut mgr).await;
                     mgr.state.media_playing = false;
+                    mgr.state.media_blocking = false;
                 }
             }
         }

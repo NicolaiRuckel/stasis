@@ -166,6 +166,7 @@ pub async fn spawn_ipc_socket_with_listener(
                                                         let uptime = mgr.state.start_time.elapsed();
                                                         let manually_inhibited = mgr.state.manually_paused;
                                                         let paused = mgr.state.paused;
+                                                        let media_blocking = mgr.state.media_blocking;
                                                         let cfg_clone = mgr.state.cfg.clone();
                                                         
                                                         // Release manager lock before acquiring app_inhibitor lock
@@ -198,13 +199,14 @@ pub async fn spawn_ipc_socket_with_listener(
                                                                 "text": text,
                                                                 "alt": icon,
                                                                 "tooltip": format!(
-                                                                    "{}\nIdle time: {}\nUptime: {}\nPaused: {}\nManually paused: {}\nApp blocking: {}",
+                                                                    "{}\nIdle time: {}\nUptime: {}\nPaused: {}\nManually paused: {}\nApp blocking: {}\nMedia blocking: {}",
                                                                     if idle_inhibited { "Idle inhibited" } else { "Idle active" },
                                                                     format_duration(idle_time),
                                                                     format_duration(uptime),
                                                                     paused,
                                                                     manually_inhibited,
-                                                                    app_blocking
+                                                                    app_blocking,
+                                                                    media_blocking
                                                                 )
                                                             })
                                                             .to_string()
