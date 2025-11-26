@@ -6,23 +6,33 @@ impl StasisConfig {
         &self,
         idle_time: Option<Duration>,
         uptime: Option<Duration>,
-        is_inhibited: Option<bool>,
-        is_manually_inhibited: Option<bool>,
+        is_paused: Option<bool>,
+        is_manually_paused: Option<bool>,
+        app_blocking: Option<bool>,
+        media_blocking: Option<bool>,
     ) -> String {
         let mut out = String::new();
         out.push_str("Status:\n");
+        
         if let Some(idle) = idle_time {
-            out.push_str(&format!("  IdleTime           = {}\n", utils::format_duration(idle)));
+            out.push_str(&format!("  Idle Time          = {}\n", utils::format_duration(idle)));
         }
         if let Some(up) = uptime {
             out.push_str(&format!("  Uptime             = {}\n", utils::format_duration(up)));
         }
-        if let Some(inhibited) = is_inhibited {
-            out.push_str(&format!("  IdleInhibited      = {}\n", inhibited));
+        if let Some(paused) = is_paused {
+            out.push_str(&format!("  Paused             = {}\n", paused));
         }
-        if let Some(inhibited) = is_manually_inhibited {
-            out.push_str(&format!("  ManuallyInhibited  = {}\n", inhibited));
+        if let Some(manually_paused) = is_manually_paused {
+            out.push_str(&format!("  Manually Paused    = {}\n", manually_paused));
         }
+        if let Some(app_paused) = app_blocking {
+            out.push_str(&format!("  App Blocking       = {}\n", app_paused));
+        }
+        if let Some(media_paused) = media_blocking {
+            out.push_str(&format!("  Media Blocking     = {}\n", media_paused));
+        }
+        
         // General settings
         out.push_str("\nConfig:\n");
         out.push_str(&format!(
@@ -41,6 +51,7 @@ impl StasisConfig {
         out.push_str(&format!("  DebounceSeconds    = {}\n", self.debounce_seconds));
         out.push_str(&format!("  LidCloseAction     = {}\n", self.lid_close_action));
         out.push_str(&format!("  LidOpenAction      = {}\n", self.lid_open_action));
+        
         let apps = if self.inhibit_apps.is_empty() {
             "-".to_string()
         } else {
@@ -51,10 +62,13 @@ impl StasisConfig {
                 .join(",")
         };
         out.push_str(&format!("  InhibitApps        = {}\n", apps));
+        
         // Actions
-        out.push_str("\nActions:\n");
+        out.push_str("\nActions (fires in sequence):\n");
         // Track groups in order of first occurrence
         let mut seen_groups = BTreeSet::new();
+        let mut action_counter = 1;
+        
         for action in &self.actions {
             let group = if action.name.starts_with("ac.") {
                 "AC"
@@ -75,7 +89,8 @@ impl StasisConfig {
                 .unwrap_or(&action.name);
             
             out.push_str(&format!(
-                "    {:<20} Timeout={} Kind={} Command=\"{}\"",
+                "    {}. {:<18} Timeout={} Kind={} Command=\"{}\"",
+                action_counter,
                 display_name,
                 action.timeout,
                 action.kind,
@@ -84,11 +99,12 @@ impl StasisConfig {
             if let Some(lock_cmd) = &action.lock_command {
                 out.push_str(&format!(" LockCommand=\"{}\"", lock_cmd));
             }
-
             if let Some(resume_cmd) = &action.resume_command {
                 out.push_str(&format!(" ResumeCommand=\"{}\"", resume_cmd));
             }
             out.push('\n');
+            
+            action_counter += 1;
         }
         out
     }

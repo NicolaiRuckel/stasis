@@ -211,7 +211,14 @@ pub async fn spawn_ipc_socket_with_listener(
                                                             })
                                                             .to_string()
                                                         } else if let Some(cfg) = &cfg_clone {
-                                                            cfg.pretty_print(Some(idle_time), Some(uptime), Some(idle_inhibited), Some(manually_inhibited))
+                                                            cfg.pretty_print(
+                                                                Some(idle_time), 
+                                                                Some(uptime), 
+                                                                Some(idle_inhibited), 
+                                                                Some(manually_inhibited), 
+                                                                Some(app_blocking), 
+                                                                Some(media_blocking)
+                                                            )
                                                         } else {
                                                             "No configuration loaded".to_string()
                                                         };
