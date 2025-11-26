@@ -137,7 +137,7 @@ pub fn check_media_playing(ignore_remote_media: bool, media_blacklist: &[String]
 
 fn check_local_audio() -> bool {
     // Small delay to allow sink state to update after MPRIS detection
-    std::thread::sleep(std::time::Duration::from_millis(150));
+    std::thread::sleep(std::time::Duration::from_millis(300));
     
     let output = match Command::new("pactl").args(["list", "sinks", "short"]).output() {
         Ok(o) => o,

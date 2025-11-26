@@ -12,104 +12,144 @@ impl StasisConfig {
         media_blocking: Option<bool>,
     ) -> String {
         let mut out = String::new();
-        out.push_str("Status:\n");
+        
+        // Calculate the global pipe position
+        // Find the longest label across all sections
+        let status_labels = vec!["Idle Time", "Uptime", "Paused", "Manually Paused", "App Blocking", "Media Blocking"];
+        let config_labels = vec!["PreSuspendCommand", "MonitorMedia", "IgnoreRemoteMedia", 
+                                 "RespectInhibitors", "NotifyOnUnpause", "DebounceSeconds",
+                                 "LidCloseAction", "LidOpenAction", "InhibitApps"];
+        let action_labels = vec!["Timeout", "Kind", "Command", "LockCommand", "ResumeCommand"];
+        
+        let max_label = status_labels.iter()
+            .chain(config_labels.iter())
+            .chain(action_labels.iter())
+            .map(|s| s.len())
+            .max()
+            .unwrap_or(0);
+        
+        // Pipe position = 2 spaces indent + max_label + 1 space
+        let pipe_pos = 2 + max_label + 1;
+        
+        // Status section
+        out.push_str("◆ STATUS\n");
         
         if let Some(idle) = idle_time {
-            out.push_str(&format!("  Idle Time          = {}\n", utils::format_duration(idle)));
+            out.push_str(&format!("  {:<width$} │ {}\n", "Idle Time", utils::format_duration(idle), width = max_label));
         }
         if let Some(up) = uptime {
-            out.push_str(&format!("  Uptime             = {}\n", utils::format_duration(up)));
+            out.push_str(&format!("  {:<width$} │ {}\n", "Uptime", utils::format_duration(up), width = max_label));
         }
         if let Some(paused) = is_paused {
-            out.push_str(&format!("  Paused             = {}\n", paused));
+            let indicator = if paused { "●" } else { "○" };
+            out.push_str(&format!("  {:<width$} │ {} {}\n", "Paused", indicator, paused, width = max_label));
         }
         if let Some(manually_paused) = is_manually_paused {
-            out.push_str(&format!("  Manually Paused    = {}\n", manually_paused));
+            let indicator = if manually_paused { "●" } else { "○" };
+            out.push_str(&format!("  {:<width$} │ {} {}\n", "Manually Paused", indicator, manually_paused, width = max_label));
         }
         if let Some(app_paused) = app_blocking {
-            out.push_str(&format!("  App Blocking       = {}\n", app_paused));
+            let indicator = if app_paused { "●" } else { "○" };
+            out.push_str(&format!("  {:<width$} │ {} {}\n", "App Blocking", indicator, app_paused, width = max_label));
         }
         if let Some(media_paused) = media_blocking {
-            out.push_str(&format!("  Media Blocking     = {}\n", media_paused));
+            let indicator = if media_paused { "●" } else { "○" };
+            out.push_str(&format!("  {:<width$} │ {} {}\n", "Media Blocking", indicator, media_paused, width = max_label));
         }
         
-        // General settings
-        out.push_str("\nConfig:\n");
+        out.push('\n');
+        
+        // Config section
+        out.push_str("◆ CONFIGURATION\n");
         out.push_str(&format!(
-            "  PreSuspendCommand  = {}\n",
-            self.pre_suspend_command.as_deref().unwrap_or("-")
+            "  {:<width$} │ {}\n",
+            "PreSuspendCommand",
+            self.pre_suspend_command.as_deref().unwrap_or("none"),
+            width = max_label
         ));
         out.push_str(&format!(
-            "  MonitorMedia       = {}\n",
-            if self.monitor_media { "true" } else { "false" }
-        ));
-        out.push_str(&format!("  IgnoreRemoteMedia  = {}\n", self.ignore_remote_media));
-        out.push_str(&format!(
-            "  RespectInhibitors  = {}\n",
-            if self.respect_wayland_inhibitors { "true" } else { "false" }
+            "  {:<width$} │ {}\n",
+            "MonitorMedia",
+            if self.monitor_media { "✓ enabled" } else { "✗ disabled" },
+            width = max_label
         ));
         out.push_str(&format!(
-            "  NotifyOnUnpause    = {}\n",
-            if self.notify_on_unpause { "true" } else { "false" }
+            "  {:<width$} │ {}\n", 
+            "IgnoreRemoteMedia",
+            if self.ignore_remote_media { "✓ enabled" } else { "✗ disabled" },
+            width = max_label
         ));
-        out.push_str(&format!("  DebounceSeconds    = {}\n", self.debounce_seconds));
-        out.push_str(&format!("  LidCloseAction     = {}\n", self.lid_close_action));
-        out.push_str(&format!("  LidOpenAction      = {}\n", self.lid_open_action));
+        out.push_str(&format!(
+            "  {:<width$} │ {}\n",
+            "RespectInhibitors",
+            if self.respect_wayland_inhibitors { "✓ enabled" } else { "✗ disabled" },
+            width = max_label
+        ));
+        out.push_str(&format!(
+            "  {:<width$} │ {}\n",
+            "NotifyOnUnpause",
+            if self.notify_on_unpause { "✓ enabled" } else { "✗ disabled" },
+            width = max_label
+        ));
+        out.push_str(&format!("  {:<width$} │ {}s\n", "DebounceSeconds", self.debounce_seconds, width = max_label));
+        out.push_str(&format!("  {:<width$} │ {}\n", "LidCloseAction", self.lid_close_action, width = max_label));
+        out.push_str(&format!("  {:<width$} │ {}\n", "LidOpenAction", self.lid_open_action, width = max_label));
         
         let apps = if self.inhibit_apps.is_empty() {
-            "-".to_string()
+            "none".to_string()
         } else {
             self.inhibit_apps
                 .iter()
                 .map(|p| p.to_string())
                 .collect::<Vec<_>>()
-                .join(",")
+                .join(", ")
         };
-        out.push_str(&format!("  InhibitApps        = {}\n", apps));
+        out.push_str(&format!("  {:<width$} │ {}\n", "InhibitApps", apps, width = max_label));
         
-        // Actions
-        out.push_str("\nActions (fires in sequence):\n");
-        // Track groups in order of first occurrence
+        out.push('\n');
+        
+        // Actions section
+        out.push_str("◆ ACTIONS\n");
+        
         let mut seen_groups = BTreeSet::new();
         let mut action_counter = 1;
         
         for action in &self.actions {
             let group = if action.name.starts_with("ac.") {
-                "AC"
+                "AC Power"
             } else if action.name.starts_with("battery.") {
-                "Battery"
+                "Battery Power"
             } else {
                 "Desktop"
             };
             
-            // Print group header only once
             if seen_groups.insert(group) {
-                out.push_str(&format!("  [{}]\n", group));
+                out.push_str(&format!("  [{group}]\n"));
             }
             
-            // Strip the prefix from the action name for display
             let display_name = action.name
                 .strip_prefix("ac.")
                 .or_else(|| action.name.strip_prefix("battery."))
                 .unwrap_or(&action.name);
             
-            // Action number and name
-            out.push_str(&format!("    {}. {}\n", action_counter, display_name));
+            // Action header - number outside, name only
+            out.push_str(&format!(
+                "  {}. {}\n",
+                action_counter,
+                display_name
+            ));
             
-            // Aligned key-value pairs
-            out.push_str(&format!("       Timeout        : {}\n", action.timeout));
-            out.push_str(&format!("       Kind           : {}\n", action.kind));
-            out.push_str(&format!("       Command        : \"{}\"\n", action.command));
+            // Action details - indented to align pipes
+            out.push_str(&format!("     {:<width$} │ {}s\n", "Timeout", action.timeout, width = max_label - 3));
+            out.push_str(&format!("     {:<width$} │ {}\n", "Kind", action.kind, width = max_label - 3));
+            out.push_str(&format!("     {:<width$} │ {}\n", "Command", action.command, width = max_label - 3));
             
             if let Some(lock_cmd) = &action.lock_command {
-                out.push_str(&format!("       LockCommand    : \"{}\"\n", lock_cmd));
+                out.push_str(&format!("     {:<width$} │ {}\n", "LockCommand", lock_cmd, width = max_label - 3));
             }
             if let Some(resume_cmd) = &action.resume_command {
-                out.push_str(&format!("       ResumeCommand  : \"{}\"\n", resume_cmd));
+                out.push_str(&format!("     {:<width$} │ {}\n", "ResumeCommand", resume_cmd, width = max_label - 3));
             }
-            
-            // Blank line between actions for readability
-            out.push('\n');
             
             action_counter += 1;
         }
