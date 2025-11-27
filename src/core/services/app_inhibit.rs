@@ -33,6 +33,11 @@ impl AppInhibitor {
         }
     }
 
+    /// Update the config reference when config is reloaded
+    pub async fn update_from_config(&mut self, cfg: &StasisConfig) {
+        self.cfg = Arc::new(cfg.clone());
+    }
+
     /// Returns true if any app in inhibit_apps is currently running
     pub async fn is_any_app_running(&mut self) -> bool {
         let mut new_active_apps = HashSet::new();

@@ -62,6 +62,11 @@ pub async fn spawn_ipc_socket_with_listener(
                                                     let cfg_clone = mgr.state.cfg.clone();
                                                     
                                                     drop(mgr);
+
+                                                    {
+                                                        let mut inhibitor = app_inhibitor.lock().await;
+                                                        inhibitor.update_from_config(&new_cfg).await;
+                                                    }
                                                     
                                                     // Try to get app blocking status with timeout
                                                     let app_blocking = match timeout(
