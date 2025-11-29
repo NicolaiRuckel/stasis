@@ -29,7 +29,6 @@ pub async fn spawn_ipc_socket_with_listener(
         loop {
             match listener.accept().await {
                 Ok((mut stream, _addr)) => {
-                    // Clone for each connection
                     let manager = Arc::clone(&manager);
                     let app_inhibitor = Arc::clone(&app_inhibitor);
                     
@@ -53,7 +52,6 @@ pub async fn spawn_ipc_socket_with_listener(
                                                     mgr.recheck_media().await;
                                                     mgr.trigger_instant_actions().await;
                                                     
-                                                    // Capture info for display
                                                     let idle_time = mgr.state.last_activity.elapsed();
                                                     let uptime = mgr.state.start_time.elapsed();
                                                     let manually_inhibited = mgr.state.manually_paused;
@@ -68,7 +66,6 @@ pub async fn spawn_ipc_socket_with_listener(
                                                         inhibitor.update_from_config(&new_cfg).await;
                                                     }
                                                     
-                                                    // Try to get app blocking status with timeout
                                                     let app_blocking = match timeout(
                                                         Duration::from_millis(100),
                                                         async {
@@ -82,7 +79,6 @@ pub async fn spawn_ipc_socket_with_listener(
 
                                                     log_message("Config reloaded successfully");
                                                     
-                                                    // Return config info instead of just success message
                                                     if let Some(cfg) = &cfg_clone {
                                                         format!(
                                                             "Config reloaded successfully\n\n{}",
@@ -105,12 +101,11 @@ pub async fn spawn_ipc_socket_with_listener(
                                                 }
                                             }
                                         }
- 
+
                                         // === PAUSE/RESUME ===
                                         cmd if cmd.starts_with("pause") => {
                                             let args = cmd.strip_prefix("pause").unwrap_or("").trim();
                                             
-                                            // Check for help
                                             if args.eq_ignore_ascii_case("help") 
                                                 || args == "-h" 
                                                 || args == "--help" {
@@ -195,8 +190,6 @@ pub async fn spawn_ipc_socket_with_listener(
                                         // === INFO ===
                                         "info" | "info --json" => {
                                             let as_json = cmd.contains("--json");
-
-                                            // Use try_lock with retry for info command to avoid blocking
                                             let mut retry_count = 0;
                                             let max_retries = 5;
                                             
@@ -210,10 +203,8 @@ pub async fn spawn_ipc_socket_with_listener(
                                                         let media_blocking = mgr.state.media_blocking;
                                                         let cfg_clone = mgr.state.cfg.clone();
                                                         
-                                                        // Release manager lock before acquiring app_inhibitor lock
                                                         drop(mgr);
                                                         
-                                                        // Try to get app blocking status with timeout
                                                         let app_blocking = match timeout(
                                                             Duration::from_millis(100),
                                                             async {
@@ -222,7 +213,7 @@ pub async fn spawn_ipc_socket_with_listener(
                                                             }
                                                         ).await {
                                                             Ok(result) => result,
-                                                            Err(_) => false, // Timeout, assume no blocking
+                                                            Err(_) => false,
                                                         };
                                                         
                                                         let idle_inhibited = paused || app_blocking || manually_inhibited;
@@ -265,10 +256,8 @@ pub async fn spawn_ipc_socket_with_listener(
                                                         };
                                                     }
                                                     Err(_) => {
-                                                        // Lock is held, retry with small delay
                                                         retry_count += 1;
                                                         if retry_count >= max_retries {
-                                                            // Give up and return a timeout response
                                                             break if as_json {
                                                                 serde_json::json!({
                                                                     "text": "",
@@ -298,17 +287,13 @@ pub async fn spawn_ipc_socket_with_listener(
                                         }
                                     };
 
-                                    // Write response and flush
                                     if let Err(e) = stream.write_all(response.as_bytes()).await {
                                         log_error_message(&format!("Failed to write IPC response: {e}"));
                                     } else {
-                                        // Flush to ensure data is sent before closing
                                         let _ = stream.flush().await;
                                     }
                                 }
-                                Ok(_) => {
-                                    // Empty read - client disconnected
-                                }
+                                Ok(_) => {}
                                 Err(e) => {
                                     log_error_message(&format!("Failed to read IPC command: {e}"));
                                 }
@@ -319,7 +304,6 @@ pub async fn spawn_ipc_socket_with_listener(
                             log_error_message("IPC connection timed out after 10 seconds");
                         }
                         
-                        // Ensure stream is properly shut down
                         let _ = stream.shutdown().await;
                     });
                 }

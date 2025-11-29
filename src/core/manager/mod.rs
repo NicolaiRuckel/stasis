@@ -368,7 +368,7 @@ impl Manager {
         };
 
         // sync check (pactl + mpris). This is blocking but fine here.
-        let playing = crate::core::services::media::check_media_playing(ignore_remote, &media_blacklist);
+        let playing = crate::core::services::media::check_media_playing(ignore_remote, &media_blacklist, false);
 
         // Only change state via the helpers so behaviour stays consistent:
         if playing && !self.state.media_playing {
