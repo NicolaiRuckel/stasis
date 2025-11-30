@@ -85,6 +85,10 @@ fn collect_actions(config: &RuneConfig, path: &str) -> Result<Vec<IdleActionBloc
             None
         };
 
+        let notification = config
+            .get::<String>(&format!("{}.{}.notification", path, key))
+            .ok();
+
         actions.push(IdleActionBlock {
             name: key.clone(),
             timeout,
@@ -93,6 +97,7 @@ fn collect_actions(config: &RuneConfig, path: &str) -> Result<Vec<IdleActionBloc
             resume_command,
             lock_command,
             last_triggered: None,
+            notification,
         });
     }
 
@@ -240,6 +245,17 @@ pub fn load_config() -> Result<StasisConfig> {
         .or_else(|_| config.get::<u8>("stasis.debounce-seconds"))
         .unwrap_or(0u8);
 
+
+    let notify_before_action = config
+        .get::<bool>("stasis.notify_before_action")
+        .or_else(|_| config.get::<bool>("stasis.notify-before-action"))
+        .unwrap_or(false);
+
+    let notify_seconds_before = config
+        .get::<u64>("stasis.notify_seconds_before")
+        .or_else(|_| config.get::<u64>("stasis.notify-seconds-before"))
+        .unwrap_or(10);
+
     let inhibit_apps: Vec<AppInhibitPattern> = config
         .get_value("stasis.inhibit_apps")
         .or_else(|_| config.get_value("stasis.inhibit-apps"))
@@ -299,6 +315,8 @@ pub fn load_config() -> Result<StasisConfig> {
     ));
     log_message(&format!("  respect_wayland_inhibitors = {:?}", respect_wayland_inhibitors));
     log_message(&format!("  notify_on_unpause = {:?}", notify_on_unpause));
+    log_message(&format!("  notify_before_action = {:?}", notify_before_action));
+    log_message(&format!("  notify_seconds_before = {:?}", notify_seconds_before));
     log_message(&format!("  debounce_seconds = {:?}", debounce_seconds));
     log_message(&format!("  lid_close_action = {:?}", lid_close_action));
     log_message(&format!("  lid_open_action = {:?}", lid_open_action));
@@ -319,6 +337,9 @@ pub fn load_config() -> Result<StasisConfig> {
         if let Some(resume_cmd) = &action.resume_command {
             details.push_str(&format!(", resume_command=\"{}\"", resume_cmd));
         }
+        if let Some(notification) = &action.notification {
+            details.push_str(&format!(", notification=\"{}\"", notification));
+        }
         log_message(&details);
     }
 
@@ -334,5 +355,7 @@ pub fn load_config() -> Result<StasisConfig> {
         lid_close_action,
         lid_open_action,
         notify_on_unpause,
+        notify_before_action,
+        notify_seconds_before,
     })
 }

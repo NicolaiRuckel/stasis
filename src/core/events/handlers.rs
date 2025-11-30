@@ -144,53 +144,51 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
             }
         }
 
+        Event::LoginctlLock => {
+            let mut mgr = manager.lock().await;
+            log_message("loginctl lock-session received — handling lock...");
 
-Event::LoginctlLock => {
-    let mut mgr = manager.lock().await;
-    log_message("loginctl lock-session received — handling lock...");
-
-    // Skip if already locked
-    if mgr.state.lock_state.is_locked {
-        log_message("Already locked, ignoring loginctl lock-session event");
-        return;
-    }
-
-    // Clone the lock-command before mutably borrowing
-    let lock_cmd_opt = if let Some(cfg) = &mgr.state.cfg {
-        cfg.actions.iter()
-            .find(|a| a.kind == IdleAction::LockScreen)
-            .and_then(|a| a.lock_command.clone())
-    } else {
-        None
-    };
-
-    // Now we can mutably borrow
-    mgr.state.lock_state.is_locked = true;
-    mgr.state.lock_notify.notify_one();
-    
-    // Run the lock-command if it exists
-    if let Some(lock_cmd) = lock_cmd_opt {
-        log_message(&format!("Running lock-command: {}", lock_cmd));
-        match crate::core::manager::actions::run_command_detached(&lock_cmd).await {
-            Ok(pid) => {
-                mgr.state.lock_state.pid = Some(pid);
-                log_message(&format!("Lock command started with PID {}", pid));
+            // Skip if already locked
+            if mgr.state.lock_state.is_locked {
+                log_message("Already locked, ignoring loginctl lock-session event");
+                return;
             }
-            Err(e) => {
-                log_message(&format!("Failed to run lock-command: {}", e));
+
+            // Clone the lock-command before mutably borrowing
+            let lock_cmd_opt = if let Some(cfg) = &mgr.state.cfg {
+                cfg.actions.iter()
+                    .find(|a| a.kind == IdleAction::LockScreen)
+                    .and_then(|a| a.lock_command.clone())
+            } else {
+                None
+            };
+
+            // Now we can mutably borrow
+            mgr.state.lock_state.is_locked = true;
+            mgr.state.lock_notify.notify_one();
+            
+            // Run the lock-command if it exists
+            if let Some(lock_cmd) = lock_cmd_opt {
+                log_message(&format!("Running lock-command: {}", lock_cmd));
+                match crate::core::manager::actions::run_command_detached(&lock_cmd).await {
+                    Ok(pid) => {
+                        mgr.state.lock_state.pid = Some(pid);
+                        log_message(&format!("Lock command started with PID {}", pid));
+                    }
+                    Err(e) => {
+                        log_message(&format!("Failed to run lock-command: {}", e));
+                    }
+                }
+            } else {
+                log_message("No lock-command configured");
             }
+            
+            // Advance past lock so subsequent actions (like DPMS/suspend) can trigger
+            mgr.advance_past_lock().await;
+            
+            // Wake the lock watcher loop
+            wake_idle_tasks(&mgr.state);
         }
-    } else {
-        log_message("No lock-command configured");
-    }
-    
-    // Advance past lock so subsequent actions (like DPMS/suspend) can trigger
-    mgr.advance_past_lock().await;
-    
-    // Wake the lock watcher loop
-    wake_idle_tasks(&mgr.state);
-}
-
 
         Event::LoginctlUnlock => {
             let mut mgr = manager.lock().await;

@@ -17,9 +17,10 @@ impl StasisConfig {
         // Find the longest label across all sections
         let status_labels = vec!["Idle Time", "Uptime", "Paused", "Manually Paused", "App Blocking", "Media Blocking"];
         let config_labels = vec!["PreSuspendCommand", "MonitorMedia", "IgnoreRemoteMedia", 
-                                 "RespectInhibitors", "NotifyOnUnpause", "DebounceSeconds",
+                                 "RespectInhibitors", "NotifyOnUnpause", "NotifyBeforeAction",
+                                 "NotifySecondsBefore", "DebounceSeconds",
                                  "LidCloseAction", "LidOpenAction", "InhibitApps"];
-        let action_labels = vec!["Timeout", "Kind", "Command", "LockCommand", "ResumeCommand"];
+        let action_labels = vec!["Timeout", "Kind", "Command", "LockCommand", "Notification", "ResumeCommand"];
         
         let max_label = status_labels.iter()
             .chain(config_labels.iter())
@@ -88,6 +89,13 @@ impl StasisConfig {
             if self.notify_on_unpause { "✓ enabled" } else { "✗ disabled" },
             width = max_label
         ));
+        out.push_str(&format!(
+            "  {:<width$} │ {}\n",
+            "NotifyBeforeAction",
+            if self.notify_before_action { "✓ enabled" } else { "✗ disabled" },
+            width = max_label
+        ));
+        out.push_str(&format!("  {:<width$} │ {}s\n", "NotifySecondsBefore", self.notify_seconds_before, width = max_label));
         out.push_str(&format!("  {:<width$} │ {}s\n", "DebounceSeconds", self.debounce_seconds, width = max_label));
         out.push_str(&format!("  {:<width$} │ {}\n", "LidCloseAction", self.lid_close_action, width = max_label));
         out.push_str(&format!("  {:<width$} │ {}\n", "LidOpenAction", self.lid_open_action, width = max_label));
@@ -143,6 +151,9 @@ impl StasisConfig {
             
             if let Some(lock_cmd) = &action.lock_command {
                 out.push_str(&format!("     {:<width$} │ {}\n", "LockCommand", lock_cmd, width = max_label - 3));
+            }
+            if let Some(notification) = &action.notification {
+                out.push_str(&format!("     {:<width$} │ {}\n", "Notification", notification, width = max_label - 3));
             }
             if let Some(resume_cmd) = &action.resume_command {
                 out.push_str(&format!("     {:<width$} │ {}\n", "ResumeCommand", resume_cmd, width = max_label - 3));

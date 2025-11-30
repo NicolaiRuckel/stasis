@@ -61,7 +61,7 @@ Stasis doesn't just lock your screen after a timer—it understands context. Wat
 - [x] **Resume-command support** – Each action block can run an optional follow-up command after completion.  
 - [x] **Event-driven, minimal polling** – Stasis now relies primarily on two internal loops that notify others to wake from deep sleep, significantly reducing CPU and memory usage at idle.  
 - [x] **CLI per-state triggers** – Trigger a **specific state**, the **current state**, or **all states**, all while respecting previously completed actions.  
-
+- [x] Custom notifications - Run notifications before any command block as well as notify on unpause!  requires `libnotify`
 
 ### In Progress
 
@@ -69,7 +69,6 @@ Stasis doesn't just lock your screen after a timer—it understands context. Wat
 
 ### Planned
 
-- [ ] **Custom notifications** – display alerts for idle events or action execution.
 - [ ] **Logging & analytics** – historical idle data for power/performance insights.
 - [ ] **Power-saving optimizations** – CPU/GPU-aware idle handling.
 

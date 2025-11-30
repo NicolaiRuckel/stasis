@@ -31,6 +31,7 @@ pub struct IdleActionBlock {
     pub resume_command: Option<String>,
     pub lock_command: Option<String>,
     pub last_triggered: Option<Instant>,
+    pub notification: Option<String>,
 }
 
 impl IdleActionBlock {
@@ -94,6 +95,8 @@ pub struct StasisConfig {
     pub lid_close_action: LidCloseAction,
     pub lid_open_action: LidOpenAction,
     pub notify_on_unpause: bool,
+    pub notify_before_action: bool,
+    pub notify_seconds_before: u64,
 }
 
 impl std::fmt::Display for LidCloseAction {

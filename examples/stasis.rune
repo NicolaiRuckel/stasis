@@ -1,4 +1,4 @@
-# metadata (not required to keet)
+# metadata (not required to keep)
 @author "Dustin Pilgrim"
 @description "Stasis configuration file"
 
@@ -39,6 +39,26 @@ stasis:
   #  `stasis pause until <TIME>`
   # run stasis pause help for more information
   #notify_on_unpause true
+
+  # notifications before actions are run [DEFAULT: false]
+  # You must also set `notification` in the block you want it in
+  # e.g.
+  #   lock-screen:
+  #   ...
+  #   notification: "Locking session in 10s"
+  #   end
+  #
+  #notify-before-command true
+
+  # number of seconds before a command this should notify [DEFAULT: 0]
+  # specify the number of seconds this will trigger a
+  # notification before running your desired blocks.
+  # 
+  # NOTE: This is also ontop of any configured debounce
+  # so if you have 10s timeout + 5s debounce + notify 10s before
+  # it would -> 10s timeout -> 5s debounce -> notify then wait 10s -> run your action block!
+  # super complex stuff here reaching desktop level complexity for Wayland!
+  #notify-seconds-before 10
 
   inhibit_apps [
     "vlc"
