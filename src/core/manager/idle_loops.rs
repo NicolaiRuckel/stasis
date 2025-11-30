@@ -93,9 +93,10 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
             // Lock is active — monitor it until it ends or shutdown
             loop {
                 // Snapshot relevant info
-                let (maybe_cmd, was_locked, shutdown, lock_notify) = {
+                let (maybe_pid, maybe_cmd, was_locked, shutdown, lock_notify) = {
                     let mgr = manager.lock().await;
                     (
+                        mgr.state.lock_state.pid,
                         mgr.state.lock_state.command.clone(),
                         mgr.state.lock_state.is_locked,
                         mgr.state.shutdown_flag.clone(),
@@ -107,8 +108,11 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
                     break;
                 }
 
-                // Check if process is still running (if we have a command)
-                let still_active = if let Some(cmd) = maybe_cmd {
+                    // Check if process is still running
+                let still_active = if let Some(pid) = maybe_pid {
+                    // Check if the PID still exists
+                    std::path::Path::new(&format!("/proc/{}", pid)).exists()
+                } else if let Some(cmd) = maybe_cmd {
                     is_process_running(&cmd).await
                 } else {
                     sleep(Duration::from_millis(500)).await;

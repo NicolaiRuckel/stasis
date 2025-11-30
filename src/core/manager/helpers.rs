@@ -168,6 +168,24 @@ pub async fn run_action(mgr: &mut Manager, action: &IdleActionBlock) {
         action.name, action.kind, action.timeout, action.command
     ));
 
+    // For lock actions using loginctl, run the command but don't manage state
+    // The LoginctlLock event will handle setting up the lock state
+    if matches!(action.kind, crate::config::model::IdleAction::LockScreen) {
+        if action.command.contains("loginctl lock-session") {
+            log_message("Lock uses loginctl lock-session, triggering it (state will be managed by loginctl event)");
+            // Run the loginctl command to trigger the Lock signal
+            if let Err(e) = run_command_detached(&action.command).await {
+                log_message(&format!("Failed to run loginctl lock-session: {}", e));
+            }
+            return;
+        }
+        
+        if mgr.state.lock_state.is_locked {
+            log_message("Lock screen action skipped: already locked");
+            return;
+        }
+    }
+
     // Brightness capture
     if matches!(action.kind, crate::config::model::IdleAction::Brightness) && mgr.state.previous_brightness.is_none() {
         let _ = capture_brightness(&mut mgr.state).await;
@@ -213,22 +231,16 @@ pub async fn run_action(mgr: &mut Manager, action: &IdleActionBlock) {
     }
 }
 
+
 pub async fn run_command_for_action(mgr: &mut Manager, action: &IdleActionBlock, cmd: String) {
     let is_lock = matches!(action.kind, crate::config::model::IdleAction::LockScreen);
     if is_lock {
-        // Determine which command to actually run
-        let lock_cmd = if action.lock_command.is_some() {
-            // If lock_command is set, run loginctl and then the lock_command
-            log_message("Running loginctl lock-session (lock_command is configured)");
-            match run_command_detached("loginctl lock-session").await {
-                Ok(_) => log_message("loginctl lock-session executed"),
-                Err(e) => log_error_message(&format!("Failed to run loginctl lock-session: {}", e)),
-            }
-            
-            // Then run the actual lock_command
-            action.lock_command.as_ref().unwrap().clone()
+        // Determine which command to run based on whether lock-command is set
+        let lock_cmd = if let Some(ref lock_cmd) = action.lock_command {
+            // lock-command is set, just run it (don't call loginctl again)
+            lock_cmd.clone()
         } else {
-            // No lock_command set, just run the regular command (hyprlock, etc.)
+            // No lock-command, run the regular command
             cmd
         };
 
@@ -249,6 +261,7 @@ pub async fn run_command_for_action(mgr: &mut Manager, action: &IdleActionBlock,
         mgr.spawned_tasks.push(spawned);
     }
 }
+
 
 pub async fn lock_still_active(state: &ManagerState) -> bool {
     if let Some(cmd) = &state.lock_state.command {

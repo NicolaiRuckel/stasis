@@ -94,12 +94,22 @@ pub async fn is_process_running(cmd: &str) -> bool {
     if cmd.trim().is_empty() {
         return false;
     }
+    
+    // Extract the actual binary name from the command
     let first_word = cmd.split_whitespace().next().unwrap_or("");
     if first_word.is_empty() {
         return false;
     }
-    match Command::new("pgrep").arg(first_word).output().await {
+    
+    // Get just the binary name (last component of the path)
+    let binary_name = std::path::Path::new(first_word)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(first_word);
+    
+    match Command::new("pgrep").arg("-x").arg(binary_name).output().await {
         Ok(output) => !output.stdout.is_empty(),
         Err(_) => false,
     }
 }
+

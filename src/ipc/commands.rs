@@ -85,62 +85,72 @@ pub async fn trigger_action_by_name(manager: Arc<Mutex<Manager>>, name: &str) ->
         }
     };
 
-    log_message(&format!("Action triggered: '{}'", strip_action_prefix(&action.name)));
+    log_message(&format!("Action triggered via IPC: '{}'", strip_action_prefix(&action.name)));
     let is_lock = matches!(action.kind, crate::config::model::IdleAction::LockScreen);
 
     if is_lock {
-        // Mark lock state and notify watcher
-        mgr.state.lock_state.is_locked = true;
-        mgr.state.lock_state.post_advanced = false;
-        mgr.state.lock_state.command = Some(action.command.clone());
-        mgr.state.lock_notify.notify_one();
-
-        // Run the lock command
-        run_action(&mut mgr, &action).await;
-
-        // Mark as advanced past lock
-        mgr.advance_past_lock().await;
-
-        // ---- Mirror reset() behavior exactly for timers ----
-        let now = Instant::now();
-        if let Some(cfg) = &mgr.state.cfg {
-            let debounce = Duration::from_secs(cfg.debounce_seconds as u64);
-            mgr.state.last_activity = now;
-            mgr.state.debounce = Some(now + debounce);
-
-            // Clear last_triggered for all actions
-            {
-                let actions = &mut mgr.state.default_actions;
-                for a in actions.iter_mut() {
-                    a.last_triggered = None;
-                }
+        // Check if this uses loginctl lock-session
+        let uses_loginctl = action.command.contains("loginctl lock-session");
+        
+        if uses_loginctl {
+            // For loginctl-based locks, just trigger the command
+            // The LoginctlLock event will handle the rest
+            log_message("Lock uses loginctl lock-session, triggering it via IPC");
+            if let Err(e) = crate::core::manager::actions::run_command_detached(&action.command).await {
+                return Err(format!("Failed to trigger lock: {}", e));
             }
-            {
-                let actions = &mut mgr.state.ac_actions;
-                for a in actions.iter_mut() {
-                    a.last_triggered = None;
-                }
-            }
-            {
-                let actions = &mut mgr.state.battery_actions;
-                for a in actions.iter_mut() {
-                    a.last_triggered = None;
-                }
-            }
+        } else {
+            // For non-loginctl locks, do the full lock setup
+            mgr.state.lock_state.is_locked = true;
+            mgr.state.lock_state.post_advanced = false;
+            mgr.state.lock_state.command = Some(action.command.clone());
+            mgr.state.lock_notify.notify_one();
 
-            // Determine active block name first
-            let active_block = if !mgr.state.ac_actions.is_empty() || !mgr.state.battery_actions.is_empty() {
-                match mgr.state.on_battery() {
-                    Some(true) => "battery",
-                    Some(false) => "ac",
-                    None => "default",
-                }
-            } else {
-                "default"
-            };
+            // Run the lock command
+            run_action(&mut mgr, &action).await;
 
-            // Now isolate block mutation
-            {
+            // Mark as advanced past lock
+            mgr.advance_past_lock().await;
+
+            // Reset timers
+            let now = Instant::now();
+            if let Some(cfg) = &mgr.state.cfg {
+                let debounce = Duration::from_secs(cfg.debounce_seconds as u64);
+                mgr.state.last_activity = now;
+                mgr.state.debounce = Some(now + debounce);
+
+                // Clear last_triggered for all actions
+                {
+                    let actions = &mut mgr.state.default_actions;
+                    for a in actions.iter_mut() {
+                        a.last_triggered = None;
+                    }
+                }
+                {
+                    let actions = &mut mgr.state.ac_actions;
+                    for a in actions.iter_mut() {
+                        a.last_triggered = None;
+                    }
+                }
+                {
+                    let actions = &mut mgr.state.battery_actions;
+                    for a in actions.iter_mut() {
+                        a.last_triggered = None;
+                    }
+                }
+
+                // Determine active block name first
+                let active_block = if !mgr.state.ac_actions.is_empty() || !mgr.state.battery_actions.is_empty() {
+                    match mgr.state.on_battery() {
+                        Some(true) => "battery",
+                        Some(false) => "ac",
+                        None => "default",
+                    }
+                } else {
+                    "default"
+                };
+
+                // Now isolate block mutation
                 let actions = match active_block {
                     "ac" => &mut mgr.state.ac_actions,
                     "battery" => &mut mgr.state.battery_actions,
@@ -171,10 +181,10 @@ pub async fn trigger_action_by_name(manager: Arc<Mutex<Manager>>, name: &str) ->
 
                 mgr.state.action_index = next_index;
             }
-        }
 
-        // Wake idle loop to recalculate timers
-        mgr.state.notify.notify_one();
+            // Wake idle loop to recalculate timers
+            mgr.state.notify.notify_one();
+        }
     } else {
         run_action(&mut mgr, &action).await;
     }
