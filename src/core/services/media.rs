@@ -45,10 +45,40 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
             
             if is_detected && !was_detected {
                 crate::log::log_message("Firefox MPRIS bridge now detected, spawning browser media monitor");
+                
+                // Reset media state - clear any MPRIS-based media tracking
+                {
+                    let mut mgr = manager_clone.lock().await;
+                    if mgr.state.media_playing {
+                        decr_active_inhibitor(&mut mgr).await;
+                        mgr.state.media_playing = false;
+                        mgr.state.media_blocking = false;
+                    }
+                }
+                
+                // Now spawn the browser monitor which will do a fresh check
                 crate::core::services::browser_media::spawn_browser_media_monitor(Arc::clone(&manager_clone)).await;
                 was_detected = true;
             } else if !is_detected && was_detected {
                 crate::log::log_message("Firefox MPRIS bridge lost");
+                
+                // Reset browser media state
+                crate::core::services::browser_media::reset_browser_monitor().await;
+                {
+                    let mut mgr = manager_clone.lock().await;
+                    // Clear browser-specific state
+                    let prev_tab_count = mgr.state.browser_playing_tab_count;
+                    for _ in 0..prev_tab_count {
+                        decr_active_inhibitor(&mut mgr).await;
+                    }
+                    mgr.state.browser_playing_tab_count = 0;
+                    mgr.state.browser_media_playing = false;
+                    mgr.state.media_playing = false;
+                    mgr.state.media_blocking = false;
+                }
+                
+                // Re-enable D-Bus MPRIS checking
+                crate::log::log_message("Re-enabling standard MPRIS detection");
                 was_detected = false;
             }
         }
@@ -115,8 +145,11 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
                     continue;
                 }
 
+                // Check if extension exists - if it does, skip MPRIS for Firefox
+                let skip_ff = firefox_extension_exists();
+
                 // Otherwise check MPRIS for non-browser media
-                let any_playing = check_media_playing(ignore_remote_media, &media_blacklist, skip_firefox);
+                let any_playing = check_media_playing(ignore_remote_media, &media_blacklist, skip_ff);
                 let mut mgr = manager.lock().await;
                 if any_playing && !mgr.state.media_playing {
                     incr_active_inhibitor(&mut mgr).await;
@@ -135,39 +168,9 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
 
 // Detect if Firefox extension/script exists
 fn firefox_extension_exists() -> bool {
-    // Check multiple common installation paths
-    let mut possible_paths = vec![
-        "/usr/local/bin/per_tab_mpris_bridge.py".to_string(),
-        "/usr/bin/per_tab_mpris_bridge.py".to_string(),
-        "/home/dustin/projects/apps/firefox-tab-mpris-bridge/native-host/per_tab_mpris_bridge.py".to_string(),
-    ];
-    
-    // Add user-specific paths if HOME is set
-    if let Ok(home) = std::env::var("HOME") {
-        possible_paths.push(format!("{}/.local/bin/per_tab_mpris_bridge.py", home));
-        possible_paths.push(format!("{}/bin/per_tab_mpris_bridge.py", home));
-    }
-
-    for path_str in possible_paths {
-        let path = std::path::Path::new(&path_str);
-        if path.exists() && path.is_file() {
-            // Check if socket exists (more reliable indicator that bridge is running)
-            let socket_path = std::path::Path::new("/tmp/mpris_bridge.sock");
-            if socket_path.exists() {
-                crate::log::log_message(&format!("Found Firefox MPRIS bridge at: {}", path_str));
-                return true;
-            }
-        }
-    }
-    
-    // Final check: just look for the socket (most reliable)
+    // Just check for the socket (most reliable)
     let socket_path = std::path::Path::new("/tmp/mpris_bridge.sock");
-    if socket_path.exists() {
-        crate::log::log_message("SoundTabs MPRIS bridge socket found");
-        return true;
-    }
-    
-    false
+    socket_path.exists()
 }
 
 pub fn check_media_playing(ignore_remote_media: bool, media_blacklist: &[String], skip_firefox: bool) -> bool {

@@ -53,6 +53,12 @@ struct BrowserMediaState {
     playing_tabs: Vec<i32>,
 }
 
+/// Reset the monitor flag so it can be restarted
+pub async fn reset_browser_monitor() {
+    MONITOR_RUNNING.store(false, Ordering::SeqCst);
+    log_message("Browser media monitor reset");
+}
+
 /// Spawn a background task that polls the browser media bridge
 pub async fn spawn_browser_media_monitor(manager: Arc<Mutex<Manager>>) {
     // Prevent multiple monitors from running
@@ -165,5 +171,3 @@ async fn handle_browser_media_state(
     // Update browser media playing flag
     mgr.state.browser_media_playing = new_tab_count > 0;
 }
-
-
