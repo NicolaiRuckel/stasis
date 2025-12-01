@@ -27,6 +27,13 @@ stasis:
   # lid_open_action:
   #   can be one of: wake | custom | ignore
   #
+  # NOTE: For custom just define a string directly do NOT write 
+  # `custom`
+  #
+  # i.e. lid_close_action "hyprlock && sleep 3 && systemctl suspend"
+  # or
+  # lid-close-action "hyprlock && sleep 3 && systemctl suspend"
+  #
   #lid_close_action "lock-screen"
   #lid_open_action "wake"
   

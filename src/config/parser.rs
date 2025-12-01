@@ -203,20 +203,11 @@ pub fn load_config() -> Result<StasisConfig> {
         .get::<String>("stasis.lid_close_action")
         .or_else(|_| config.get::<String>("stasis.lid-close-action"))
         .ok()
-        .map(|s| match s.as_str() {
+        .map(|s| match s.trim() {
             "ignore" => LidCloseAction::Ignore,
             "lock_screen" | "lock-screen" => LidCloseAction::LockScreen,
             "suspend" => LidCloseAction::Suspend,
-            other if other.starts_with("custom:") => {
-                LidCloseAction::Custom(other.trim_start_matches("custom:").trim().to_string())
-            }
-            _ => {
-                log_message(&format!(
-                    "Unknown lid_close_action '{}', defaulting to ignore",
-                    s
-                ));
-                LidCloseAction::Ignore
-            }
+            other => LidCloseAction::Custom(other.to_string()),
         })
         .unwrap_or(LidCloseAction::Ignore);
 
@@ -224,19 +215,10 @@ pub fn load_config() -> Result<StasisConfig> {
         .get::<String>("stasis.lid_open_action")
         .or_else(|_| config.get::<String>("stasis.lid-open-action"))
         .ok()
-        .map(|s| match s.as_str() {
+        .map(|s| match s.trim() {
             "ignore" => LidOpenAction::Ignore,
             "wake" => LidOpenAction::Wake,
-            other if other.starts_with("custom:") => {
-                LidOpenAction::Custom(other.trim_start_matches("custom:").trim().to_string())
-            }
-            _ => {
-                log_message(&format!(
-                    "Unknown lid_open_action '{}', defaulting to ignore",
-                    s
-                ));
-                LidOpenAction::Ignore
-            }
+            other => LidOpenAction::Custom(other.to_string()),
         })
         .unwrap_or(LidOpenAction::Ignore);
 
@@ -254,7 +236,7 @@ pub fn load_config() -> Result<StasisConfig> {
     let notify_seconds_before = config
         .get::<u64>("stasis.notify_seconds_before")
         .or_else(|_| config.get::<u64>("stasis.notify-seconds-before"))
-        .unwrap_or(10);
+        .unwrap_or(0);
 
     let inhibit_apps: Vec<AppInhibitPattern> = config
         .get_value("stasis.inhibit_apps")
