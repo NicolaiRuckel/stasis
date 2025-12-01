@@ -263,7 +263,6 @@ impl Manager {
         self.state.resume_queue.clear();
     }
 
-
     pub fn next_action_instant(&self) -> Option<Instant> {
         if self.state.paused || self.state.manually_paused {
             return None;
@@ -311,8 +310,6 @@ impl Manager {
 
         min_time
     }
-
-
 
     pub async fn advance_past_lock(&mut self) {
         log_message("Advancing state past lock stage...");
@@ -367,8 +364,8 @@ impl Manager {
             None => (false, Vec::new()),
         };
 
-        // sync check (pactl + mpris). This is blocking but fine here.
-        let playing = crate::core::services::media::check_media_playing(ignore_remote, &media_blacklist, false);
+        // sync check (pactl + mpris).
+        let playing = crate::core::services::media::check_media_playing(ignore_remote, &media_blacklist, false, );
 
         // Only change state via the helpers so behaviour stays consistent:
         if playing && !self.state.media_playing {

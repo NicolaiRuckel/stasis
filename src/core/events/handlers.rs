@@ -95,8 +95,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                 let lid_close = cfg.lid_close_action.clone();
                 let suspend_action_opt = cfg.actions.iter().find(|a| a.kind == IdleAction::Suspend).cloned();
                 let lock_action_opt = cfg.actions.iter().find(|a| a.kind == IdleAction::LockScreen).cloned();
-                let custom_action_opt = cfg.actions.iter().find(|a| a.kind == IdleAction::Custom).cloned();
-                let _ = cfg; // release immutable borrow
+                let _ = cfg;
 
                 match lid_close {
                     LidCloseAction::Suspend => {
@@ -108,11 +107,12 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                         if let Some(lock_action) = lock_action_opt {
                             run_action(&mut mgr, &lock_action).await;
                         }
-                    }
+                    }                    
                     LidCloseAction::Custom(cmd) => {
                         log_message(&format!("Running custom lid-close command: {}", cmd));
-                        if let Some(custom_action) = custom_action_opt {
-                            run_action(&mut mgr, &custom_action).await;
+                        match crate::core::manager::actions::run_command_detached(&cmd).await {
+                            Ok(pid) => log_message(&format!("Custom lid-close command started with PID {}", pid)),
+                            Err(e) => log_message(&format!("Failed to run custom lid-close command: {}", e)),
                         }
                     }
                     LidCloseAction::Ignore => {
@@ -132,10 +132,10 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                         mgr.resume(false).await;
                         mgr.reset().await;
                         wake_idle_tasks(&mgr.state);
-                    }
+                    }                   
                     LidOpenAction::Custom(cmd) => {
                         log_message(&format!("Running custom lid-open command: {}", cmd));
-                        // spawn command here if needed
+                        let _ = crate::core::manager::actions::run_command_detached(cmd).await;
                     }
                     LidOpenAction::Ignore => {
                         log_message("Lid open ignored by config");
