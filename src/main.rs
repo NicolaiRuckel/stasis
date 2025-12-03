@@ -21,6 +21,12 @@ pub const SOCKET_PATH: &str = "/tmp/stasis.sock";
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let args = Args::parse();
+
+    if args.verbose {
+        log::set_verbose(true);
+    } else {
+        log::set_verbose(false);
+    }
     
     if var("WAYLAND_DISPLAY").is_err() {
         eprintln!("Warn: Stasis requires wayland to run.");

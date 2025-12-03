@@ -53,6 +53,13 @@ pub enum Command {
         #[arg(long, help = "Output as JSON (for Waybar or scripts)")]
         json: bool,
     },
+
+    #[command(about = "Dump recent log lines (for debugging)")]
+    Dump {
+        #[arg(default_value_t = 20, help = "Number of recent lines to show")]
+        lines: usize, // optional positional argument with default 20
+    },
+
 }
 
 impl Command {

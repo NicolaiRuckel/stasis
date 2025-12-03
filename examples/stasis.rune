@@ -10,12 +10,17 @@ default_timeout 300  # 5 minute(s)
 # ...
 # end
 stasis:
-  pre_suspend_command "hyprlock"
+  # Specify a command to run before suspending
+  # Perhaps ensure the session is locked
+  #pre_suspend_command "swaylock"
+  
   monitor_media true
-  ignore_remote_media true
+  ignore_remote_media true # Ignore remote players such as Spotify, KDE Connect, etc.
+  
   # Stasis allows you to define a list of media players that you want
   # to ignore when inhibiting Stasis based on media playback
   #media_blacklist ["spotify"] 
+  
   respect_idle_inhibitors true
  
   # For laptops:

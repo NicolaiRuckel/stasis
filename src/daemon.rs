@@ -27,7 +27,9 @@ use crate::{
 
 /// Spawn the daemon with all its background services
 pub async fn run_daemon(listener: UnixListener, verbose: bool) -> Result<()> {
-    // --- Load config ---
+    // Load config
+    // XDG_CONFIG_HOME/stasis/stasis.rune -> /etc/stasis/stasis.rune ->
+    // /usr/share/stasis/stasis.rune
     if verbose {
         log_message("Verbose mode enabled");
         crate::log::set_verbose(true);
@@ -37,20 +39,20 @@ pub async fn run_daemon(listener: UnixListener, verbose: bool) -> Result<()> {
     let manager = Manager::new(Arc::clone(&cfg));
     let manager = Arc::new(Mutex::new(manager));
 
-    // --- Spawn background tasks ---
+    // Spawn internal background tasks
     let idle_handle = spawn_idle_task(Arc::clone(&manager));
     let lock_handle = spawn_lock_watcher(Arc::clone(&manager)).await;
     let input_handle = spawn_input_task(Arc::clone(&manager));
-    
-    // Store handles in manager - CRITICAL: Use explicit scope to drop lock
+
+    // Store handles in manager
     {
         let mut mgr = manager.lock().await;
         mgr.idle_task_handle = Some(idle_handle);
         mgr.lock_task_handle = Some(lock_handle);
         mgr.input_task_handle = Some(input_handle);
-    } // Lock is dropped here before continuing
+    }
     
-    // --- Spawn suspend event listener ---
+    // Spawn suspend event listener
     let dbus_manager = Arc::clone(&manager);
     tokio::spawn(async move {
         if let Err(e) = listen_for_power_events(dbus_manager).await {
@@ -58,40 +60,39 @@ pub async fn run_daemon(listener: UnixListener, verbose: bool) -> Result<()> {
         }
     });
 
-    // --- AC/Battery Detection (DETECT FIRST, synchronously) ---
-    // Use explicit scope like in original working code
+    // Initial AC/battery detection (synchronously)
     {
         detect_initial_power_state(&manager).await;
     }
     
-    // --- AC/Battery Detection ---
+    // AC/battery detection (background task)
     let laptop_manager = Arc::clone(&manager);
     tokio::spawn(spawn_power_source_monitor(laptop_manager));
 
-    // Immediately trigger instants at startup
+    // Immediately trigger instant actions at startup
     {
         let mut mgr = manager.lock().await;
         mgr.trigger_instant_actions().await;
-    } // Lock dropped here
+    }
     
-    // --- Spawn app inhibit task ---
+    // Spawn app inhibit task
     let app_inhibitor = spawn_app_inhibit_task(
         Arc::clone(&manager),
         Arc::clone(&cfg)
     ).await;
    
-    // --- Spawn media monitor task ---
+    // Spawn media monitor task
     if cfg.monitor_media {
         if let Err(e) = spawn_media_monitor_dbus(Arc::clone(&manager)).await {
             log_error_message(&format!("Failed to spawn media monitor: {}", e));
         }
     }
     
-    // --- Wayland setup ---
+    // Wayland inhibitors integration loop setup
     let wayland_manager = Arc::clone(&manager);
     let _ = setup_wayland(wayland_manager, cfg.respect_wayland_inhibitors).await?;
 
-    // -- IPC Control Socket ---
+    // IPC control socket
     ipc::spawn_ipc_socket_with_listener(
         Arc::clone(&manager),
         Arc::clone(&app_inhibitor),
@@ -103,16 +104,16 @@ pub async fn run_daemon(listener: UnixListener, verbose: bool) -> Result<()> {
         Arc::clone(&app_inhibitor),
     ).await;
 
-    // Monitor Wayland compositor connection
+    // Monitor Wayland compositor connection loop (cleanly exit Stasis when Wayland dies)
     spawn_wayland_monitor(
         Arc::clone(&manager),
         Arc::clone(&app_inhibitor),
     ).await;
     
-    // --- Log startup message ---
-    log_message(&format!("Running. Idle actions loaded: {}", cfg.actions.len()));
+    // Log startup message
+    log_message(&format!("Stasis started. Idle actions loaded: {}", cfg.actions.len()));
     
-    // --- Run main async tasks ---
+    // Run main async tasks
     let local = LocalSet::new();
     local.run_until(async {
         std::future::pending::<()>().await;

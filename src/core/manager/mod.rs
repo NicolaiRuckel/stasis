@@ -17,7 +17,7 @@ use crate::{
         actions::{is_process_running, run_command_detached},
         helpers::{restore_brightness, run_action},
     }, 
-    log::log_message
+    log::{log_message, log_message_debug}
 };
 
 pub struct Manager {
@@ -48,7 +48,7 @@ impl Manager {
 
         let instant_actions = self.state.get_active_instant_actions();
 
-        log_message("Triggering instant actions at startup...");
+        log_message_debug("Triggering instant actions at startup...");
         for action in instant_actions {
             run_action(self, &action).await;
         }
@@ -58,7 +58,7 @@ impl Manager {
 
     pub fn reset_instant_actions(&mut self) {
         self.state.instants_triggered = false;
-        log_message("Instant actions reset; they can trigger again");
+        log_message_debug("Instant actions reset; they can trigger again");
     }
 
     // Called when libinput service resets (on user activity)
@@ -66,7 +66,7 @@ impl Manager {
         let cfg = match &self.state.cfg {
             Some(cfg) => Arc::clone(cfg),
             None => {
-                log_message("No configuration available, skipping reset");
+                log_message_debug("No configuration available, skipping reset");
                 return;
             }
         };

@@ -1,4 +1,6 @@
 use std::process;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use eyre::Result;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -7,6 +9,7 @@ use tokio::{
 };
 
 use crate::{cli::Command, SOCKET_PATH};
+use crate::log::log_path;
 
 /// Handle client commands that communicate with the daemon via socket
 pub async fn handle_client_command(cmd: &Command) -> Result<()> {
@@ -19,6 +22,7 @@ pub async fn handle_client_command(cmd: &Command) -> Result<()> {
         Command::Resume => handle_simple_command("resume", "Idle timers resumed").await,
         Command::Stop => handle_simple_command("stop", "Stasis daemon stopped").await,
         Command::ToggleInhibit => handle_toggle_inhibit().await,
+        Command::Dump { lines } => handle_dump(*lines).await,
     }
 }
 
@@ -212,3 +216,28 @@ async fn handle_simple_command(command: &str, success_msg: &str) -> Result<()> {
     }
     Ok(())
 }
+
+async fn handle_dump(lines: usize) -> eyre::Result<()> {
+    let path = log_path();
+
+    let file = match File::open(&path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to open log file {}: {}", path.display(), e);
+            return Ok(());
+        }
+    };
+
+    let reader = BufReader::new(file);
+    let all_lines: Vec<String> = reader.lines()
+        .filter_map(Result::ok)
+        .collect();
+
+    let start = all_lines.len().saturating_sub(lines);
+    for line in &all_lines[start..] {
+        println!("{}", line);
+    }
+
+    Ok(())
+}
+

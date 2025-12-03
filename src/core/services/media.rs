@@ -27,10 +27,10 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
 
     // If Firefox extension exists, spawn the browser media monitor
     if skip_firefox {
-        crate::log::log_message("Media Bridge plugin detected, spawning browser media monitor");
+        crate::log::log_message_media_bridge("Media Bridge plugin detected, spawning browser media monitor");
         crate::core::services::browser_media::spawn_browser_media_monitor(Arc::clone(&manager)).await;
     } else {
-        crate::log::log_message("Firefox MPRIS bridge not found, using standard MPRIS detection");
+        crate::log::log_message_media_bridge("Browser MPRIS bridge not found, using standard MPRIS detection");
     }
 
     let manager_clone = Arc::clone(&manager);
@@ -43,7 +43,7 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
             let is_detected = firefox_extension_exists();
             
             if is_detected && !was_detected {
-                crate::log::log_message("Firefox MPRIS bridge now detected, transitioning to browser media monitor");
+                crate::log::log_message_media_bridge("Browser MPRIS bridge now detected, transitioning to browser media monitor");
                 
                 // HANDOFF: MPRIS → Browser Extension
                 {
@@ -147,21 +147,12 @@ pub async fn spawn_media_monitor_dbus(manager: Arc<tokio::sync::Mutex<Manager>>)
                     (ignore, blacklist, mgr.state.browser_media_playing, mgr.state.media_bridge_active)
                 };
 
-                // If browser extension is active, it manages all browser media
-                // MPRIS should only check non-browser players in this mode
                 if bridge_active {
                     // Check for non-browser media
                     let skip_ff = true;
                     let any_non_browser_playing = check_media_playing(ignore_remote_media, &media_blacklist, skip_ff);
                     
                     let mut mgr = manager.lock().await;
-                    
-                    // The browser extension handles browser media (already counted in inhibitors)
-                    // We just need to handle non-browser media with a separate inhibitor
-                    // 
-                    // State should be:
-                    // - media_playing reflects if ANY media is playing (browser OR non-browser)
-                    // - But we don't double-count inhibitors
                     
                     // Update media_playing to reflect combined state
                     let should_be_playing = browser_playing || any_non_browser_playing;

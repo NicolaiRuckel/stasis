@@ -32,12 +32,9 @@ pub async fn prepare_action(action: &IdleActionBlock) -> Vec<ActionRequest> {
             }
         }
         IdleAction::LockScreen => {
-            // Check the actual lock process, not the trigger command
             let probe_cmd = if let Some(ref lock_cmd) = action.lock_command {
-                // If lock_command is set, check for that process
                 lock_cmd
             } else {
-                // Otherwise check for the regular command
                 &action.command
             };
             
@@ -119,11 +116,6 @@ pub async fn run_command_detached(command: &str) -> Result<ProcessInfo, Box<dyn 
 }
 
 /// Extract the expected process name from a command
-/// Handles cases like:
-/// - "hyprlock" -> Some("hyprlock")
-/// - "/usr/bin/hyprlock" -> Some("hyprlock")
-/// - "/usr/bin/lock.sh --lock" -> Some("lock.sh")
-/// - "loginctl lock-session" -> Some("loginctl") (but we'll check differently)
 fn extract_expected_process_name(command: &str) -> Option<String> {
     let first_word = command.split_whitespace().next()?;
     

@@ -254,75 +254,86 @@ pub async fn run_command_for_action(
     cmd: String
 ) {
     use crate::config::model::IdleAction;
-    
+
     let is_lock = matches!(action.kind, IdleAction::LockScreen);
+
     if is_lock {
-        // CRITICAL DISTINCTION:
-        // - If command is "loginctl lock-session", it just sends a signal
-        //   In this case, lock-command is WHAT TO RUN (the actual locker)
-        // - For any other command, it's the actual lock trigger
-        //   In this case, lock-command is WHAT TO TRACK (process name to monitor)
-        
-        let uses_loginctl = action.command.contains("loginctl lock-session");
-        
-        if uses_loginctl {
-            // loginctl case: lock-command is what to actually run
+        let is_loginctl = cmd.contains("loginctl lock-session");
+
+        if is_loginctl {
+            // Case 1: loginctl path
+            log_message("Lock triggered via loginctl — running loginctl but not tracking it");
+
+            // Fire loginctl (do not track)
+            if let Err(e) = run_command_detached(&cmd).await {
+                log_message(&format!("Failed to run loginctl: {}", e));
+            }
+
+            // Now run and track the real lock-command
             if let Some(ref lock_cmd) = action.lock_command {
-                log_message(&format!(
-                    "Using loginctl trigger, running lock-command: {}", 
-                    lock_cmd
-                ));
+                log_message(&format!("Running and tracking lock-command: {}", lock_cmd));
+
                 match run_command_detached(lock_cmd).await {
                     Ok(process_info) => {
                         mgr.state.lock_state.process_info = Some(process_info.clone());
                         mgr.state.lock_state.is_locked = true;
+
                         log_message(&format!(
-                            "Lock screen started: PID={}, PGID={}", 
-                            process_info.pid, 
-                            process_info.pgid
+                            "Lock started: PID={} PGID={}",
+                            process_info.pid, process_info.pgid
                         ));
                     }
-                    Err(e) => log_message(&format!("Failed to run lock-command '{}': {}", lock_cmd, e)),
+                    Err(e) => log_message(&format!(
+                        "Failed to run lock-command '{}': {}",
+                        lock_cmd, e
+                    )),
                 }
             } else {
-                log_message("Warning: loginctl lock-session used but no lock-command set!");
+                log_message("WARNING: loginctl used but no lock-command configured.");
                 mgr.state.lock_state.is_locked = true;
             }
-        } else {
-            // Normal case: run the command, track by lock-command if set
-            log_message(&format!("Running lock command: {}", cmd));
-            match run_command_detached(&cmd).await {
-                Ok(process_info) => {
-                    // If lock-command is set, override the expected_process_name
-                    let mut tracking_info = process_info;
-                    if let Some(ref lock_cmd) = action.lock_command {
-                        log_message(&format!(
-                            "Will track lock by process name: {}", 
-                            lock_cmd
-                        ));
-                        tracking_info.expected_process_name = Some(lock_cmd.clone());
-                    }
-                    
-                    mgr.state.lock_state.process_info = Some(tracking_info.clone());
-                    mgr.state.lock_state.is_locked = true;
-                    log_message(&format!(
-                        "Lock screen started: PID={}, PGID={}, tracking: {:?}", 
-                        tracking_info.pid, 
-                        tracking_info.pgid,
-                        tracking_info.expected_process_name
-                    ));
-                }
-                Err(e) => log_message(&format!("Failed to run lock command '{}': {}", cmd, e)),
-            }
+
+            return;
         }
-    } else {
-        let spawned = tokio::spawn(async move {
-            if let Err(e) = run_command_silent(&cmd).await {
-                log_message(&format!("Failed to run command '{}': {}", cmd, e));
+
+        // Case 2: normal locker (anything except loginctl)
+        log_message(&format!("Running lock command: {}", cmd));
+
+        match run_command_detached(&cmd).await {
+            Ok(mut process_info) => {
+                // lock-command = process name override, not a command to run
+                if let Some(ref lock_cmd) = action.lock_command {
+                    log_message(&format!(
+                        "Using lock-command as process name override: {}",
+                        lock_cmd
+                    ));
+                    process_info.expected_process_name = Some(lock_cmd.clone());
+                }
+
+                mgr.state.lock_state.process_info = Some(process_info.clone());
+                mgr.state.lock_state.is_locked = true;
+
+                log_message(&format!(
+                    "Lock started: PID={} PGID={} tracking={:?}",
+                    process_info.pid,
+                    process_info.pgid,
+                    process_info.expected_process_name
+                ));
             }
-        });
-        mgr.spawned_tasks.push(spawned);
+
+            Err(e) => log_message(&format!("Failed to run '{}' => {}", cmd, e)),
+        }
+
+        return;
     }
+
+    // NON-lock case
+    let spawned = tokio::spawn(async move {
+        if let Err(e) = run_command_silent(&cmd).await {
+            log_message(&format!("Failed to run command '{}': {}", cmd, e));
+        }
+    });
+    mgr.spawned_tasks.push(spawned);
 }
 
 pub async fn lock_still_active(state: &crate::core::manager::state::ManagerState) -> bool {

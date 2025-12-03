@@ -1,5 +1,6 @@
 use std::fs;
 use crate::core::utils::{detect_chassis, ChassisKind};
+use crate::log::log_message;
 
 pub fn ensure_user_config_exists() -> std::io::Result<()> {
     if let Some(mut path) = dirs::home_dir() {
@@ -21,7 +22,7 @@ pub fn ensure_user_config_exists() -> std::io::Result<()> {
         // Otherwise, generate initial config
         let contents = generate_default_config();
         fs::write(&path, contents)?;
-        println!("Stasis: Default config created at {:?}", path);
+        log_message(&format!("Stasis: Default config created at {:?}", path));
     }
     Ok(())
 }
@@ -42,13 +43,72 @@ fn default_laptop_config() -> String {
 @author "Dustin Pilgrim"
 @description "Lightweight feature packed idle manager for Wayland"
 
+# Everything related to your configuration goes under this block
+# stasis:
+# ...
+# end
 stasis:
-  monitor_media true
-  # Stop remote media from affecting pause
-  ignore_remote_media true
+  # Specify a command to run before suspending
+  # Perhaps ensure the session is locked
+  #pre_suspend_command "swaylock"
+
+  monitor_media true 
+  ignore_remote_media true # Ignore remote players such as Spotify, KDE Connect, etc.
+
+  # Stasis allows you to define a list of media players that you want
+  # to ignore when inhibiting Stasis based on media playback
+  #media_blacklist ["spotify"] 
+  
   respect_idle_inhibitors true
+
+  # For laptops:
+  #
+  # you can specify an action to do on lid close/open
+  # lid_close_action:
+  #   can be one of: lock-screen | suspend | custom | ignore
+  #
+  # lid_open_action:
+  #   can be one of: wake | custom | ignore
+  #
+  # NOTE: For custom just define a string directly do NOT write 
+  # `custom`
+  #
+  # i.e. lid_close_action "hyprlock && sleep 3 && systemctl suspend"
+  # or
+  # lid-close-action "hyprlock && sleep 3 && systemctl suspend"
+  #
+  #lid_close_action "lock-screen"
+  #lid_open_action "wake"
+
   # Uncomment to customized debounce, default is 0
   # debounce_seconds 4
+
+  # enable notifications when Stasis unpauses from 
+  # `stasis pause for <DURATION>`
+  #  or
+  #  `stasis pause until <TIME>`
+  # run stasis pause help for more information
+  #notify_on_unpause true
+
+  # notifications before actions are run [DEFAULT: false]
+  # You must also set `notification` in the block you want it in
+  # e.g.
+  #   lock-screen:
+  #   ...
+  #   notification: "Locking session in 10s"
+  #   end
+  #
+  #notify-before-command true
+
+  # number of seconds before a command this should notify [DEFAULT: 0]
+  # specify the number of seconds this will trigger a
+  # notification before running your desired blocks.
+  # 
+  # NOTE: This is also ontop of any configured debounce
+  # so if you have 10s timeout + 5s debounce + notify 10s before
+  # it would -> 10s timeout -> 5s debounce -> notify then wait 10s -> run your action block!
+  # super complex stuff here reaching desktop level complexity for Wayland!
+  #notify-seconds-before 10
   
   inhibit_apps [
     "vlc"
@@ -118,15 +178,51 @@ fn default_desktop_config() -> String {
 @author "Dustin Pilgrim"
 @description "Lightweight feature packed idle manager for Wayland"
 
+# Everything related to your configuration goes under this block
+# stasis:
+# ...
+# end
 stasis:
+  # Specify a command to run before suspending
+  # Perhaps ensure the session is locked
+  #pre_suspend_command "swaylock"
+  
   monitor_media true
-  # Stop remote media from affecting pause
-  ignore_remote_media true
+  ignore_remote_media true # Ignore remote players such as Spotify, KDE Connect, etc.
+  # Stasis allows you to define a list of media players that you want
+  # to ignore when inhibiting Stasis based on media playback
+  #media_blacklist ["spotify"] 
   respect_idle_inhibitors true
-  # Uncomment to lock screen on lid close
-  #lid_close_action "lock-screen"
-  # Uncomment to customized debounce, default is 0
-  # debounce_seconds 4
+  
+  # debounce: default is 0s; can be customized if needed
+  #debounce-seconds 4
+
+  # enable notifications when Stasis unpauses from 
+  # `stasis pause for <DURATION>`
+  #  or
+  #  `stasis pause until <TIME>`
+  # run stasis pause help for more information
+  #notify_on_unpause true
+
+  # notifications before actions are run [DEFAULT: false]
+  # You must also set `notification` in the block you want it in
+  # e.g.
+  #   lock-screen:
+  #   ...
+  #   notification: "Locking session in 10s"
+  #   end
+  #
+  #notify-before-command true
+
+  # number of seconds before a command this should notify [DEFAULT: 0]
+  # specify the number of seconds this will trigger a
+  # notification before running your desired blocks.
+  # 
+  # NOTE: This is also ontop of any configured debounce
+  # so if you have 10s timeout + 5s debounce + notify 10s before
+  # it would -> 10s timeout -> 5s debounce -> notify then wait 10s -> run your action block!
+  # super complex stuff here reaching desktop level complexity for Wayland!
+  #notify-seconds-before 10
 
   inhibit_apps [
     "vlc"
