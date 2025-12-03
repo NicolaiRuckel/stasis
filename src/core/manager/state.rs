@@ -3,7 +3,9 @@ use std::{sync::Arc, time::{Duration, Instant}};
 use tokio::sync::Notify;
 
 use crate::{
-    config::model::{IdleAction, IdleActionBlock, StasisConfig}, log::log_message
+    config::model::{IdleActionBlock, StasisConfig}, 
+    log::log_message,
+    core::manager::actions::ProcessInfo
 };
 use crate::core::utils::{detect_chassis, ChassisKind};
 
@@ -335,12 +337,12 @@ impl Default for ChassisType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LockState {
     pub is_locked: bool,
-    pub pid: Option<u32>,
+    pub process_info: Option<ProcessInfo>,
     pub command: Option<String>,
-    pub last_advanced: Option<Instant>,
+    pub last_advanced: Option<std::time::Instant>,
     pub post_advanced: bool,
 }
 
@@ -348,7 +350,7 @@ impl Default for LockState {
     fn default() -> Self {
         Self {
             is_locked: false,
-            pid: None,
+            process_info: None,
             command: None,
             last_advanced: None,
             post_advanced: false,
@@ -357,13 +359,12 @@ impl Default for LockState {
 }
 
 impl LockState {
-    pub fn from_config(cfg: &StasisConfig) -> Self {
-        // Find the first LockScreen action (there should usually be one)
+    pub fn from_config(cfg: &crate::config::model::StasisConfig) -> Self {
+        use crate::config::model::IdleAction;
+        
         let lock_action = cfg.actions.iter().find(|a| a.kind == IdleAction::LockScreen);
 
         let command = lock_action.map(|a| {
-            // If lock_command is set, check for that process (hyprlock, etc)
-            // Otherwise check for the regular command process
             if let Some(ref lock_cmd) = a.lock_command {
                 lock_cmd.clone()
             } else {
@@ -371,10 +372,9 @@ impl LockState {
             }
         });
 
-
         Self {
             is_locked: false,
-            pid: None,
+            process_info: None,
             command,
             last_advanced: None,
             post_advanced: false,

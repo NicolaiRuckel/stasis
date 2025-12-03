@@ -2,11 +2,11 @@ use std::{sync::Arc, time::{Duration, Instant}};
 use tokio::{
     sync::Mutex, 
     task::JoinHandle, 
-    time::{Instant as TokioInstant, sleep, sleep_until}
+    time::{Instant as TokioInstant, sleep_until}
 };
 
 use crate::{
-    core::{manager::{Manager, actions::{is_process_running, run_command_detached}}}, 
+    core::{manager::{Manager, actions::{is_process_running, is_process_active, run_command_detached}}}, 
     log::log_message
 };
 
@@ -62,16 +62,20 @@ pub fn spawn_idle_task(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> {
     })
 }
 
-pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> {
+pub async fn spawn_lock_watcher(
+    manager: std::sync::Arc<tokio::sync::Mutex<crate::core::manager::Manager>>
+) -> tokio::task::JoinHandle<()> {
+    use std::time::Duration;
+    use tokio::time::sleep;
+    
     tokio::spawn(async move {
         loop {
-            // Grab shutdown notify handle outside
             let shutdown = {
                 let mgr = manager.lock().await;
                 mgr.state.shutdown_flag.clone()
             };
 
-            // Wait until lock actually becomes active
+            // Wait until lock becomes active
             {
                 let mut mgr = manager.lock().await;
                 while !mgr.state.lock_state.is_locked {
@@ -90,13 +94,12 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
 
             log_message("Lock detected — entering lock watcher");
 
-            // Lock is active — monitor it until it ends or shutdown
+            // Monitor lock until it ends
             loop {
-                // Snapshot relevant info
-                let (maybe_pid, maybe_cmd, was_locked, shutdown, lock_notify) = {
+                let (process_info, maybe_cmd, was_locked, shutdown, lock_notify) = {
                     let mgr = manager.lock().await;
                     (
-                        mgr.state.lock_state.pid,
+                        mgr.state.lock_state.process_info.clone(),
                         mgr.state.lock_state.command.clone(),
                         mgr.state.lock_state.is_locked,
                         mgr.state.shutdown_flag.clone(),
@@ -108,10 +111,9 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
                     break;
                 }
 
-                    // Check if process is still running
-                let still_active = if let Some(pid) = maybe_pid {
-                    // Check if the PID still exists
-                    std::path::Path::new(&format!("/proc/{}", pid)).exists()
+                // Check if lock is still active
+                let still_active = if let Some(ref info) = process_info {
+                    is_process_active(info).await
                 } else if let Some(cmd) = maybe_cmd {
                     is_process_running(&cmd).await
                 } else {
@@ -123,13 +125,15 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
                     let mut mgr = manager.lock().await;
 
                     if !mgr.state.lock_state.is_locked {
-                        break;  // Already unlocked, don't do it again
+                        break;
                     }
 
+                    // Fire resume command if configured
+                    use crate::config::model::IdleAction;
                     if let Some(lock_action) = mgr.state.default_actions.iter()
                         .chain(mgr.state.ac_actions.iter())
                         .chain(mgr.state.battery_actions.iter())
-                        .find(|a| matches!(a.kind, crate::config::model::IdleAction::LockScreen))
+                        .find(|a| matches!(a.kind, IdleAction::LockScreen))
                     {
                         if let Some(resume_cmd) = &lock_action.resume_command {
                             log_message("Firing lockscreen resume command");
@@ -139,7 +143,7 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
                         }
                     }
 
-                    mgr.state.lock_state.pid = None;
+                    mgr.state.lock_state.process_info = None;
                     mgr.state.lock_state.post_advanced = false;
                     mgr.state.action_index = 0;
                     mgr.state.lock_state.is_locked = false;
@@ -150,7 +154,6 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
                     break;
                 }
 
-                // Wait a bit or for external change / shutdown
                 tokio::select! {
                     _ = lock_notify.notified() => {},
                     _ = sleep(Duration::from_millis(500)) => {},
@@ -163,3 +166,4 @@ pub async fn spawn_lock_watcher(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> 
         }
     })
 }
+

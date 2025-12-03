@@ -7,7 +7,7 @@ use crate::log::{log_error_message, log_message};
 use crate::{
     config::model::IdleActionBlock, 
     core::manager::{
-        actions::{is_process_running, prepare_action, run_command_detached, run_command_silent, ActionRequest}, 
+        actions::{is_process_running, is_process_active, prepare_action, run_command_detached, run_command_silent, ActionRequest}, 
         state::ManagerState, Manager,
     }
 };
@@ -221,7 +221,7 @@ pub async fn run_action(mgr: &mut Manager, action: &IdleActionBlock) {
                 log_message(&format!("Running pre-suspend command: {}", cmd));
                 let should_wait = match run_command_detached(cmd).await {
                     Ok(pid) => {
-                        log_message(&format!("Pre-suspend command started with PID {}", pid));
+                        log_message(&format!("Pre-suspend command started with PID {}", pid.pid));
                         true
                     }
                     Err(e) => {
@@ -248,26 +248,72 @@ pub async fn run_action(mgr: &mut Manager, action: &IdleActionBlock) {
     }
 }
 
-
-pub async fn run_command_for_action(mgr: &mut Manager, action: &IdleActionBlock, cmd: String) {
-    let is_lock = matches!(action.kind, crate::config::model::IdleAction::LockScreen);
+pub async fn run_command_for_action(
+    mgr: &mut crate::core::manager::Manager, 
+    action: &crate::config::model::IdleActionBlock, 
+    cmd: String
+) {
+    use crate::config::model::IdleAction;
+    
+    let is_lock = matches!(action.kind, IdleAction::LockScreen);
     if is_lock {
-        // Determine which command to run based on whether lock-command is set
-        let lock_cmd = if let Some(ref lock_cmd) = action.lock_command {
-            // lock-command is set, just run it (don't call loginctl again)
-            lock_cmd.clone()
-        } else {
-            // No lock-command, run the regular command
-            cmd
-        };
-
-        match run_command_detached(&lock_cmd).await {
-            Ok(pid) => {
-                mgr.state.lock_state.pid = Some(pid);
+        // CRITICAL DISTINCTION:
+        // - If command is "loginctl lock-session", it just sends a signal
+        //   In this case, lock-command is WHAT TO RUN (the actual locker)
+        // - For any other command, it's the actual lock trigger
+        //   In this case, lock-command is WHAT TO TRACK (process name to monitor)
+        
+        let uses_loginctl = action.command.contains("loginctl lock-session");
+        
+        if uses_loginctl {
+            // loginctl case: lock-command is what to actually run
+            if let Some(ref lock_cmd) = action.lock_command {
+                log_message(&format!(
+                    "Using loginctl trigger, running lock-command: {}", 
+                    lock_cmd
+                ));
+                match run_command_detached(lock_cmd).await {
+                    Ok(process_info) => {
+                        mgr.state.lock_state.process_info = Some(process_info.clone());
+                        mgr.state.lock_state.is_locked = true;
+                        log_message(&format!(
+                            "Lock screen started: PID={}, PGID={}", 
+                            process_info.pid, 
+                            process_info.pgid
+                        ));
+                    }
+                    Err(e) => log_message(&format!("Failed to run lock-command '{}': {}", lock_cmd, e)),
+                }
+            } else {
+                log_message("Warning: loginctl lock-session used but no lock-command set!");
                 mgr.state.lock_state.is_locked = true;
-                log_message(&format!("Lock screen started with PID {}", pid));
             }
-            Err(e) => log_message(&format!("Failed to run lock command '{}': {}", lock_cmd, e)),
+        } else {
+            // Normal case: run the command, track by lock-command if set
+            log_message(&format!("Running lock command: {}", cmd));
+            match run_command_detached(&cmd).await {
+                Ok(process_info) => {
+                    // If lock-command is set, override the expected_process_name
+                    let mut tracking_info = process_info;
+                    if let Some(ref lock_cmd) = action.lock_command {
+                        log_message(&format!(
+                            "Will track lock by process name: {}", 
+                            lock_cmd
+                        ));
+                        tracking_info.expected_process_name = Some(lock_cmd.clone());
+                    }
+                    
+                    mgr.state.lock_state.process_info = Some(tracking_info.clone());
+                    mgr.state.lock_state.is_locked = true;
+                    log_message(&format!(
+                        "Lock screen started: PID={}, PGID={}, tracking: {:?}", 
+                        tracking_info.pid, 
+                        tracking_info.pgid,
+                        tracking_info.expected_process_name
+                    ));
+                }
+                Err(e) => log_message(&format!("Failed to run lock command '{}': {}", cmd, e)),
+            }
         }
     } else {
         let spawned = tokio::spawn(async move {
@@ -279,9 +325,11 @@ pub async fn run_command_for_action(mgr: &mut Manager, action: &IdleActionBlock,
     }
 }
 
-
-pub async fn lock_still_active(state: &ManagerState) -> bool {
-    if let Some(cmd) = &state.lock_state.command {
+pub async fn lock_still_active(state: &crate::core::manager::state::ManagerState) -> bool {
+    if let Some(ref info) = state.lock_state.process_info {
+        is_process_active(info).await
+    } else if let Some(cmd) = &state.lock_state.command {
+        // Fallback to old method if no ProcessInfo
         is_process_running(cmd).await
     } else {
         false

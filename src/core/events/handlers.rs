@@ -111,7 +111,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                     LidCloseAction::Custom(cmd) => {
                         log_message(&format!("Running custom lid-close command: {}", cmd));
                         match crate::core::manager::actions::run_command_detached(&cmd).await {
-                            Ok(pid) => log_message(&format!("Custom lid-close command started with PID {}", pid)),
+                            Ok(pid) => log_message(&format!("Custom lid-close command started with PID {}", pid.pid)),
                             Err(e) => log_message(&format!("Failed to run custom lid-close command: {}", e)),
                         }
                     }
@@ -172,8 +172,8 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                 log_message(&format!("Running lock-command: {}", lock_cmd));
                 match crate::core::manager::actions::run_command_detached(&lock_cmd).await {
                     Ok(pid) => {
-                        mgr.state.lock_state.pid = Some(pid);
-                        log_message(&format!("Lock command started with PID {}", pid));
+                        mgr.state.lock_state.process_info = Some(pid.clone());
+                        log_message(&format!("Lock command started with PID {}", pid.pid));
                     }
                     Err(e) => {
                         log_message(&format!("Failed to run lock-command: {}", e));
