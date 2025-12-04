@@ -21,11 +21,6 @@
       </a>
     </div>
 
-    <div class="discord-banner">
-      <span class="discord-icon">💬</span>
-      <span>Join the community on</span>
-      <a href="https://discord.gg/Qjsd8MjP" target="_blank" rel="noopener noreferrer">Discord</a>
-    </div>
   </div>
 </div>
 
