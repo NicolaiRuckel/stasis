@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 use crate::{
     config::model::{IdleActionBlock, StasisConfig}, 
     log::{log_debug_message, log_message},
-    core::manager::actions::ProcessInfo
+    core::manager::processes::ProcessInfo
 };
 use crate::core::utils::{detect_chassis, ChassisKind};
 

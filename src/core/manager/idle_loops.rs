@@ -1,17 +1,21 @@
 use std::{sync::Arc, time::{Duration, Instant}};
 use tokio::{
     sync::Mutex, 
-    task::JoinHandle, 
     time::{Instant as TokioInstant, sleep_until}
 };
 
 use crate::{
-    core::{manager::{Manager, actions::{is_process_running, is_process_active, run_command_detached}}}, 
+    core::{
+        manager::{
+            Manager, 
+            processes::{is_process_running, is_process_active, run_command_detached}
+        }
+    }, 
     log::{log_debug_message, log_message},
 };
 
-pub fn spawn_idle_task(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> {
-    tokio::spawn(async move {
+pub fn spawn_idle_task(manager: Arc<Mutex<Manager>>) -> impl std::future::Future<Output = ()> + Send {
+    async move {
         loop {
             // Grab both the next timeout and the notify handles
             let (next_instant, notify, shutdown) = {
@@ -59,16 +63,16 @@ pub fn spawn_idle_task(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> {
         }
 
         log_message("Idle loop shutting down...");
-    })
+    }
 }
 
 pub async fn spawn_lock_watcher(
     manager: std::sync::Arc<tokio::sync::Mutex<crate::core::manager::Manager>>
-) -> tokio::task::JoinHandle<()> {
+) -> impl Future<Output = ()> + Send {
     use std::time::Duration;
     use tokio::time::sleep;
     
-    tokio::spawn(async move {
+    async move {
         loop {
             let shutdown = {
                 let mgr = manager.lock().await;
@@ -164,6 +168,6 @@ pub async fn spawn_lock_watcher(
                 }
             }
         }
-    })
+    }
 }
 

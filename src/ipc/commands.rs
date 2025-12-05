@@ -5,7 +5,11 @@ use std::{
 use tokio::sync::Mutex;
 
 use crate::{
-    core::manager::{helpers::{run_action, trigger_pre_suspend}, Manager},
+    core::manager::{
+        actions::run_action, 
+        helpers::trigger_pre_suspend, 
+        Manager, 
+        processes::{run_command_detached}},
     log::log_message,
 };
 
@@ -96,7 +100,7 @@ pub async fn trigger_action_by_name(manager: Arc<Mutex<Manager>>, name: &str) ->
             // For loginctl-based locks, just trigger the command
             // The LoginctlLock event will handle the rest
             log_message("Lock uses loginctl lock-session, triggering it via IPC");
-            if let Err(e) = crate::core::manager::actions::run_command_detached(&action.command).await {
+            if let Err(e) = run_command_detached(&action.command).await {
                 return Err(format!("Failed to trigger lock: {}", e));
             }
         } else {
