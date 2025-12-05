@@ -79,11 +79,11 @@ pub async fn set_manually_paused(mgr: &mut Manager, inhibit: bool) {
     if inhibit {
         // Enable manual pause
         mgr.pause(true).await;
-        mgr.state.manually_paused = true;
+        mgr.state.inhibitors.manually_paused = true;
     } else {
         // Disable manual pause
         mgr.resume(true).await;
-        mgr.state.manually_paused = false;
+        mgr.state.inhibitors.manually_paused = false;
     }
 }
 

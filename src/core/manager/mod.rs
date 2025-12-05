@@ -171,7 +171,7 @@ impl Manager {
 
     // Check whether we have been idle enough to elapse one of the timeouts
     pub async fn check_timeouts(&mut self) {
-        if self.state.paused || self.state.manually_paused {
+        if self.state.inhibitors.paused || self.state.inhibitors.manually_paused {
             return;
         }
 
@@ -320,7 +320,7 @@ impl Manager {
     }
 
     pub fn next_action_instant(&self) -> Option<Instant> {
-        if self.state.paused || self.state.manually_paused {
+        if self.state.inhibitors.paused || self.state.inhibitors.manually_paused {
             return None;
         }
 
@@ -405,32 +405,32 @@ impl Manager {
 
     pub async fn pause(&mut self, manual: bool) {
         if manual {
-            self.state.manually_paused = true;
+            self.state.inhibitors.manually_paused = true;
             log_debug_message("Idle timers manually paused");
-        } else if !self.state.manually_paused {
-            self.state.paused = true;
+        } else if !self.state.inhibitors.manually_paused {
+            self.state.inhibitors.paused = true;
             log_message("Idle timers automatically paused");
         }
     }
 
     pub async fn resume(&mut self, manually: bool) {
         if manually {
-            if self.state.manually_paused {
-                self.state.manually_paused = false;
+            if self.state.inhibitors.manually_paused {
+                self.state.inhibitors.manually_paused = false;
                 
-                if self.state.active_inhibitor_count == 0 {
-                    self.state.paused = false;
+                if self.state.inhibitors.active_inhibitor_count == 0 {
+                    self.state.inhibitors.paused = false;
                     log_message("Idle timers manually resumed");
                 } else {
                     log_message(&format!(
                         "Manual pause cleared, but {} inhibitor(s) still active - timers remain paused",
-                        self.state.active_inhibitor_count
+                        self.state.inhibitors.active_inhibitor_count
                     ));
                 }
             }
-        } else if !self.state.manually_paused && self.state.paused {
+        } else if !self.state.inhibitors.manually_paused && self.state.inhibitors.paused {
             // This is called by decr_active_inhibitor when count reaches 0
-            self.state.paused = false;
+            self.state.inhibitors.paused = false;
             log_message("Idle timers automatically resumed");
         }
     }

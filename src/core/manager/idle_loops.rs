@@ -55,7 +55,7 @@ pub fn spawn_idle_task(manager: Arc<Mutex<Manager>>) -> impl Future<Output = ()>
 
             // Now check timeouts only once after wake
             let mut mgr = manager.lock().await;
-            if !mgr.state.paused && !mgr.state.manually_paused {
+            if !mgr.state.inhibitors.paused && !mgr.state.inhibitors.manually_paused {
                 mgr.check_timeouts().await;
             }
         }
