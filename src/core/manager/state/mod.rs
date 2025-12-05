@@ -1,18 +1,22 @@
 pub mod actions;
+pub mod debounce;
 pub mod lock;
 pub mod media;
 pub mod power;
+pub mod timing;
 
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{sync::Arc, time::Instant};
 use tokio::sync::Notify;
 
 use crate::{
     config::model::{IdleActionBlock, StasisConfig},
-    core::manager::{
-        state::actions::ActionState,
-        state::media::MediaState,
-        state::lock::LockState,
-        state::power::PowerState,
+    core::manager::state::{
+        actions::ActionState, 
+        debounce::DebounceState, 
+        lock::LockState, 
+        media::MediaState, 
+        power::PowerState, 
+        timing::TimingState
     },
     log::log_debug_message,
 };
@@ -22,13 +26,10 @@ pub struct ManagerState {
     pub actions: ActionState,
     pub active_flags: ActiveFlags,
     pub active_inhibitor_count: u32,
-    pub app_inhibit_debounce: Option<Instant>,
     pub brightness_device: Option<String>,
     pub cfg: Option<Arc<StasisConfig>>,
-    pub compositor_managed: bool,
     pub dbus_inhibit_active: bool,
-    pub debounce: Option<Instant>,
-    pub last_activity: Instant,
+    pub debounce: DebounceState,
     pub lock: LockState,
     pub lock_notify: Arc<Notify>,
     pub manually_paused: bool,
@@ -41,25 +42,21 @@ pub struct ManagerState {
     pub previous_brightness: Option<u32>,
     pub pre_suspend_command: Option<String>,
     pub shutdown_flag: Arc<Notify>,
-    pub start_time: Instant,
     pub suspend_occured: bool,
+    pub timing: TimingState,
 }
 
 impl Default for ManagerState {
     fn default() -> Self {
-        let now = Instant::now();
 
         Self {
             actions: ActionState::default(),
             active_flags: ActiveFlags::default(),
             active_inhibitor_count: 0,
-            app_inhibit_debounce: None,
             brightness_device: None,
             cfg: None,
-            compositor_managed: false,
             dbus_inhibit_active: false,
-            debounce: None,
-            last_activity: now,
+            debounce: DebounceState::default(),
             lock: LockState::default(),
             lock_notify: Arc::new(Notify::new()),
             manually_paused: false,
@@ -72,8 +69,8 @@ impl Default for ManagerState {
             previous_brightness: None,
             pre_suspend_command: None,
             shutdown_flag: Arc::new(Notify::new()),
-            start_time: now,
             suspend_occured: false,
+            timing: TimingState::default(),
         }
     }
 }
@@ -81,21 +78,16 @@ impl Default for ManagerState {
 impl ManagerState {
     pub fn new(cfg: Arc<StasisConfig>) -> Self {
         let power = PowerState::new_from_config(&cfg.actions);
-
-        let now = Instant::now();
-        let debounce = Some(now + Duration::from_secs(cfg.debounce_seconds as u64));
+        let debounce = DebounceState::new(cfg.debounce_seconds.into());
 
         Self {
             actions: ActionState::default(),
             active_flags: ActiveFlags::default(),
             active_inhibitor_count: 0,
-            app_inhibit_debounce: None,
             brightness_device: None,
             cfg: Some(cfg.clone()),
-            compositor_managed: false,
             dbus_inhibit_active: false,
             debounce,
-            last_activity: now,
             lock: LockState::from_config(&cfg),
             lock_notify: Arc::new(Notify::new()),
             manually_paused: false,
@@ -108,8 +100,8 @@ impl ManagerState {
             previous_brightness: None,
             pre_suspend_command: cfg.pre_suspend_command.clone(),
             shutdown_flag: Arc::new(Notify::new()),
-            start_time: now,
             suspend_occured: false,
+            timing: TimingState::default(),
         }
     }
 
@@ -169,14 +161,12 @@ impl ManagerState {
             a.last_triggered = None;
         }
 
-        self.reset_actions();
-
-        // Debounce reset
-        self.debounce = Some(Instant::now() + Duration::from_secs(cfg.debounce_seconds as u64));
+        self.actions.reset();
+        self.debounce.reset_main(cfg.debounce_seconds.into());
 
         self.cfg = Some(Arc::new(cfg.clone()));
         self.lock = LockState::from_config(cfg);
-        self.last_activity = Instant::now();
+        self.timing.last_activity = Instant::now();
 
         log_debug_message(&format!(
             "Idle timers reloaded from config (active block: {})",
@@ -184,9 +174,6 @@ impl ManagerState {
         ));
     }
 
-    // -------------------------
-    // MEDIA STATE
-    // -------------------------
 
     pub fn wake_idle_tasks(&self) {
         self.notify.notify_waiters();
@@ -194,14 +181,6 @@ impl ManagerState {
 
     pub fn set_locked(&mut self, locked: bool) {
         self.lock.is_locked = locked;
-    }
-
-    pub fn compositor_managed(&self) -> bool {
-        self.compositor_managed
-    }
-
-    pub fn set_compositor_managed(&mut self, value: bool) {
-        self.compositor_managed = value;
     }
 
     pub fn is_manually_paused(&self) -> bool {

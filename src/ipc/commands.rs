@@ -120,8 +120,8 @@ pub async fn trigger_action_by_name(manager: Arc<Mutex<Manager>>, name: &str) ->
             let now = Instant::now();
             if let Some(cfg) = &mgr.state.cfg {
                 let debounce = Duration::from_secs(cfg.debounce_seconds as u64);
-                mgr.state.last_activity = now;
-                mgr.state.debounce = Some(now + debounce);
+                mgr.state.timing.last_activity = now;
+                mgr.state.debounce.main_debounce = Some(now + debounce);
 
                 // Clear last_triggered for all actions
                 {

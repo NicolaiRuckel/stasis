@@ -77,8 +77,8 @@ impl Manager {
         
         let now = Instant::now();
         let debounce = Duration::from_secs(cfg.debounce_seconds as u64);
-        self.state.debounce = Some(now + debounce);
-        self.state.last_activity = now;
+        self.state.debounce.main_debounce = Some(now + debounce);
+        self.state.timing.last_activity = now;
 
         // Reset notification state ONLY if not locked
         // When locked, we're just resetting for post-lock actions
@@ -182,8 +182,8 @@ impl Manager {
         // Store values we need before borrowing actions
         let action_index = self.state.actions.action_index;
         let is_locked = self.state.lock.is_locked;
-        let last_activity = self.state.last_activity;
-        let debounce = self.state.debounce;
+        let last_activity = self.state.timing.last_activity;
+        let debounce = self.state.debounce.main_debounce;
         let notification_sent = self.state.notification_sent;
         
         // Extract config values before borrowing
@@ -357,11 +357,11 @@ impl Manager {
                     prev_trig + timeout
                 } else {
                     // Previous hasn't fired yet, shouldn't happen but fallback
-                    self.state.last_activity + timeout
+                    self.state.timing.last_activity + timeout
                 }
             } else {
                 // First action: use debounce + timeout
-                let base = self.state.debounce.unwrap_or(self.state.last_activity);
+                let base = self.state.debounce.main_debounce.unwrap_or(self.state.timing.last_activity);
                 base + timeout
             };
 
