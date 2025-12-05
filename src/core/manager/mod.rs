@@ -21,7 +21,7 @@ use crate::{
         helpers::run_action,
         inhibitors::{decr_active_inhibitor, incr_active_inhibitor},
     }, 
-    log::{log_message, log_message_debug}
+    log::{log_message, log_debug_message}
 };
 
 pub struct Manager {
@@ -52,7 +52,7 @@ impl Manager {
 
         let instant_actions = self.state.get_active_instant_actions();
 
-        log_message_debug("Triggering instant actions at startup...");
+        log_debug_message("Triggering instant actions at startup...");
         for action in instant_actions {
             run_action(self, &action).await;
         }
@@ -62,7 +62,7 @@ impl Manager {
 
     pub fn reset_instant_actions(&mut self) {
         self.state.instants_triggered = false;
-        log_message_debug("Instant actions reset; they can trigger again");
+        log_debug_message("Instant actions reset; they can trigger again");
     }
 
     // Called when libinput service resets (on user activity)
@@ -70,7 +70,7 @@ impl Manager {
         let cfg = match &self.state.cfg {
             Some(cfg) => Arc::clone(cfg),
             None => {
-                log_message_debug("No configuration available, skipping reset");
+                log_debug_message("No configuration available, skipping reset");
                 return;
             }
         };
@@ -250,8 +250,8 @@ impl Manager {
         if notify_enabled && has_notification && !notification_sent {
             // Time to send notification is at base_timeout_instant
             if now >= base_timeout_instant {
-                log_message("Notification block: time to send notification!");
-                // Send notification NOW
+                log_debug_message("Notification block: time to send notification!");
+                // Send notification
                 if let Some(ref notification_msg) = actions[index].notification {
                     let notify_cmd = format!("notify-send -a Stasis '{}'", notification_msg);
                     log_message(&format!("Sending pre-action notification: {}", notification_msg));
@@ -261,12 +261,9 @@ impl Manager {
                     }
                     
                     self.state.notification_sent = true;
-                    log_message("Notification sent, returning to wait for action time");
                     self.state.notify.notify_one();
                 }
                 
-                log_message("About to return from notification block");
-                // Always return after sending notification - we need to wait for actual_action_fire_instant
                 return;
             } else {
                 // Not time for notification yet
@@ -282,17 +279,10 @@ impl Manager {
             return;
         }
 
-        let start_time = self.state.start_time; // copy Instant before mutable borrow
-
         let (action_clone, actions_len) = {
             let actions = self.state.get_active_actions_mut();
             let action_clone = actions[index].clone();
             actions[index].last_triggered = Some(now);
-            log_message(&format!(
-                "Marked action {} as triggered at t={:?}", 
-                action_clone.name,
-                now.duration_since(start_time).as_secs() // use copied value
-            ));
             (action_clone, actions.len())
         };
 
@@ -415,7 +405,7 @@ impl Manager {
     }
 
     pub async fn advance_past_lock(&mut self) {
-        log_message("Advancing state past lock stage...");
+        log_debug_message("Advancing state past lock stage...");
         self.state.lock_state.post_advanced = true;
         self.state.lock_state.last_advanced = Some(Instant::now());
     }

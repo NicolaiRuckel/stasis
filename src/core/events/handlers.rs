@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::{config::model::{IdleAction, LidCloseAction, LidOpenAction}, core::manager::{helpers::{run_action, wake_idle_tasks}, Manager}};
-use crate::log::log_message;
+use crate::log::{log_debug_message, log_error_message, log_message};
 
 pub enum Event {
     InputActivity,
@@ -111,8 +111,8 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                     LidCloseAction::Custom(cmd) => {
                         log_message(&format!("Running custom lid-close command: {}", cmd));
                         match crate::core::manager::actions::run_command_detached(&cmd).await {
-                            Ok(pid) => log_message(&format!("Custom lid-close command started with PID {}", pid.pid)),
-                            Err(e) => log_message(&format!("Failed to run custom lid-close command: {}", e)),
+                            Ok(pid) => log_debug_message(&format!("Custom lid-close command started with PID {}", pid.pid)),
+                            Err(e) => log_error_message(&format!("Failed to run custom lid-close command: {}", e)),
                         }
                     }
                     LidCloseAction::Ignore => {
@@ -146,7 +146,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
 
         Event::LoginctlLock => {
             let mut mgr = manager.lock().await;
-            log_message("loginctl lock-session received — handling lock...");
+            log_debug_message("loginctl lock-session received — handling lock...");
 
             // Skip if already locked
             if mgr.state.lock_state.is_locked {
@@ -173,7 +173,6 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                 match crate::core::manager::actions::run_command_detached(&lock_cmd).await {
                     Ok(pid) => {
                         mgr.state.lock_state.process_info = Some(pid.clone());
-                        log_message(&format!("Lock command started with PID {}", pid.pid));
                     }
                     Err(e) => {
                         log_message(&format!("Failed to run lock-command: {}", e));
@@ -192,7 +191,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
 
         Event::LoginctlUnlock => {
             let mut mgr = manager.lock().await;
-            log_message("loginctl unlock-session received — resetting state...");
+            log_debug_message("loginctl unlock-session received — resetting state...");
             
             // Reset the manager state as if user activity occurred
             mgr.reset().await;

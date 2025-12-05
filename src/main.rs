@@ -11,10 +11,7 @@ use clap::Parser;
 use eyre::Result;
 use tokio::net::{UnixListener, UnixStream};
 
-use crate::{
-    cli::Args,
-    log::log_error_message,
-};
+use crate::cli::Args;
 
 pub const SOCKET_PATH: &str = "/tmp/stasis.sock";
 
@@ -44,7 +41,6 @@ async fn main() -> Result<()> {
         if !just_help_or_version {
             eprintln!("Another instance of Stasis is already running");
         }
-        log_error_message("Another instance is already running.");
         return Ok(());
     }
     

@@ -3,7 +3,7 @@ use eyre::Result;
 use tokio::process::Command;
 use std::process::Stdio;
 use crate::config::model::{IdleActionBlock, IdleAction};
-use crate::log::log_message;
+use crate::log::{log_debug_message, log_message};
 
 #[derive(Debug, Clone)]
 pub enum ActionRequest {
@@ -102,7 +102,7 @@ pub async fn run_command_detached(command: &str) -> Result<ProcessInfo, Box<dyn 
     // Extract expected process name from command for later verification
     let expected_name = extract_expected_process_name(command);
     
-    log_message(&format!(
+    log_debug_message(&format!(
         "Spawned process: PID={}, PGID={}, expected_name={:?}",
         pid, pgid, expected_name
     ));
