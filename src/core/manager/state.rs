@@ -184,7 +184,6 @@ impl ManagerState {
     pub fn set_on_battery(&mut self, value: bool) {
         if let ChassisType::Laptop(l) = &mut self.chassis {
             l.on_battery = value;
-            // Update current_block when power state changes
             self.update_current_block();
         }
     }
@@ -331,7 +330,6 @@ impl ManagerState {
     }
 
     /// Get the total number of media inhibitors currently active
-    /// This helps with debugging and transition verification
     pub fn get_media_inhibitor_count(&self) -> usize {
         if self.media_bridge_active {
             // Browser extension tracks per-tab
@@ -354,8 +352,6 @@ impl ManagerState {
         ));
     }
 
-    /// Getters / Setters
-    ///
     /// Wake any idle tasks waiting on state changes
     pub fn wake_idle_tasks(&self) {
         self.notify.notify_waiters();
