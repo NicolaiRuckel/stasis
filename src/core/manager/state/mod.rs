@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod brightness;
 pub mod debounce;
 pub mod inhibitors;
 pub mod lock;
@@ -12,7 +13,7 @@ use tokio::sync::Notify;
 use crate::{
     config::model::{IdleActionBlock, StasisConfig},
     core::manager::state::{
-        actions::ActionState, debounce::DebounceState, inhibitors::InhibitorState, lock::LockState, media::MediaState, power::PowerState, timing::TimingState
+        actions::ActionState, brightness::BrightnessState, debounce::DebounceState, inhibitors::InhibitorState, lock::LockState, media::MediaState, power::PowerState, timing::TimingState
     },
     log::log_debug_message,
 };
@@ -20,19 +21,16 @@ use crate::{
 #[derive(Debug)]
 pub struct ManagerState {
     pub actions: ActionState,
-    pub active_flags: ActiveFlags,
-    pub brightness_device: Option<String>,
+    pub brightness: BrightnessState,
     pub cfg: Option<Arc<StasisConfig>>,
     pub debounce: DebounceState,
     pub inhibitors: InhibitorState,
     pub lock: LockState,
     pub lock_notify: Arc<Notify>,
-    pub max_brightness: Option<u32>,
     pub media: MediaState,
     pub notify: Arc<Notify>,
     pub notification_sent: bool,
     pub power: PowerState,
-    pub previous_brightness: Option<u32>,
     pub pre_suspend_command: Option<String>,
     pub shutdown_flag: Arc<Notify>,
     pub suspend_occured: bool,
@@ -44,19 +42,16 @@ impl Default for ManagerState {
 
         Self {
             actions: ActionState::default(),
-            active_flags: ActiveFlags::default(),
-            brightness_device: None,
+            brightness: BrightnessState::default(),
             cfg: None,
             debounce: DebounceState::default(),
             inhibitors: InhibitorState::default(),
             lock: LockState::default(),
             lock_notify: Arc::new(Notify::new()),
-            max_brightness: None,
             media: MediaState::default(),
             notify: Arc::new(Notify::new()),
             notification_sent: false,
             power: PowerState::new_from_config(&[]),
-            previous_brightness: None,
             pre_suspend_command: None,
             shutdown_flag: Arc::new(Notify::new()),
             suspend_occured: false,
@@ -72,19 +67,16 @@ impl ManagerState {
 
         Self {
             actions: ActionState::default(),
-            active_flags: ActiveFlags::default(),
-            brightness_device: None,
+            brightness: BrightnessState::default(),
             cfg: Some(cfg.clone()),
             debounce,
             inhibitors: InhibitorState::default(),
             lock: LockState::from_config(&cfg),
             lock_notify: Arc::new(Notify::new()),
-            max_brightness: None,
             media: MediaState::default(),
             notify: Arc::new(Notify::new()),
             notification_sent: false,
             power,
-            previous_brightness: None,
             pre_suspend_command: cfg.pre_suspend_command.clone(),
             shutdown_flag: Arc::new(Notify::new()),
             suspend_occured: false,
@@ -136,8 +128,7 @@ impl ManagerState {
     // -------------------------
 
     pub async fn update_from_config(&mut self, cfg: &StasisConfig) {
-        self.active_flags = ActiveFlags::default();
-        self.previous_brightness = None;
+        self.brightness.reset();
         self.pre_suspend_command = cfg.pre_suspend_command.clone();
 
         // CHANGED: power logic fully delegated
@@ -175,17 +166,3 @@ impl ManagerState {
     }
 }
 
-#[derive(Debug)]
-pub struct ActiveFlags {
-    pub pre_suspend_triggered: bool,
-    pub brightness_captured: bool,
-}
-
-impl Default for ActiveFlags {
-    fn default() -> Self {
-        Self {
-            pre_suspend_triggered: false,
-            brightness_captured: false,
-        }
-    }
-}

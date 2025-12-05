@@ -70,7 +70,7 @@ pub async fn run_action(mgr: &mut Manager, action: &IdleActionBlock) {
     }
 
     // Brightness capture
-    if matches!(action.kind, crate::config::model::IdleAction::Brightness) && mgr.state.previous_brightness.is_none() {
+    if matches!(action.kind, crate::config::model::IdleAction::Brightness) && mgr.state.brightness.previous_brightness.is_none() {
         let _ = capture_brightness(&mut mgr.state).await;
     }
 

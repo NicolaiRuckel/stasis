@@ -69,7 +69,7 @@ impl Manager {
         };
 
         // Restore brightness if needed
-        if self.state.previous_brightness.is_some() {
+        if self.state.brightness.previous_brightness.is_some() {
             if let Err(e) = restore_brightness(&mut self.state).await {
                 log_message(&format!("Failed to restore brightness: {}", e));
             }
