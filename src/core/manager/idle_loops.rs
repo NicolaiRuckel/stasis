@@ -7,7 +7,7 @@ use tokio::{
 
 use crate::{
     core::{manager::{Manager, actions::{is_process_running, is_process_active, run_command_detached}}}, 
-    log::log_message
+    log::{log_debug_message, log_message},
 };
 
 pub fn spawn_idle_task(manager: Arc<Mutex<Manager>>) -> JoinHandle<()> {
@@ -92,7 +92,7 @@ pub async fn spawn_lock_watcher(
                 }
             }
 
-            log_message("Lock detected — entering lock watcher");
+            log_debug_message("Lock detected — entering lock watcher");
 
             // Monitor lock until it ends
             loop {

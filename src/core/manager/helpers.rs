@@ -1,4 +1,4 @@
-use crate::log::{log_error_message, log_message};
+use crate::log::{log_debug_message, log_error_message, log_warning_message, log_message};
 use crate::{
     config::model::IdleActionBlock, 
     core::manager::{
@@ -42,7 +42,7 @@ pub async fn set_manual_inhibit(mgr: &mut Manager, inhibit: bool) {
 }
 
 pub async fn run_action(mgr: &mut Manager, action: &IdleActionBlock) {
-    log_message(&format!(
+    log_debug_message(&format!(
         "Action triggered: name=\"{}\" kind={:?} timeout={} command=\"{}\"",
         action.name, action.kind, action.timeout, action.command
     ));
@@ -51,8 +51,6 @@ pub async fn run_action(mgr: &mut Manager, action: &IdleActionBlock) {
     // The LoginctlLock event will handle setting up the lock state
     if matches!(action.kind, crate::config::model::IdleAction::LockScreen) {
         if action.command.contains("loginctl lock-session") {
-            log_message("Lock uses loginctl lock-session, triggering it (state will be managed by loginctl event)");
-            // Run the loginctl command to trigger the Lock signal
             if let Err(e) = run_command_detached(&action.command).await {
                 log_message(&format!("Failed to run loginctl lock-session: {}", e));
             }
@@ -83,7 +81,7 @@ pub async fn run_action(mgr: &mut Manager, action: &IdleActionBlock) {
                 log_message(&format!("Running pre-suspend command: {}", cmd));
                 let should_wait = match run_command_detached(cmd).await {
                     Ok(pid) => {
-                        log_message(&format!("Pre-suspend command started with PID {}", pid.pid));
+                        log_debug_message(&format!("Pre-suspend command started with PID {}", pid.pid));
                         true
                     }
                     Err(e) => {
@@ -151,7 +149,7 @@ pub async fn run_command_for_action(
                     )),
                 }
             } else {
-                log_message("WARNING: loginctl used but no lock-command configured.");
+                log_warning_message("loginctl used but no lock-command configured.");
                 mgr.state.lock_state.is_locked = true;
             }
 

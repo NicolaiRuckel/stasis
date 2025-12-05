@@ -15,7 +15,7 @@ use crate::{
         utils::format_duration,
     }, 
     ipc::commands::trigger_action_by_name, 
-    log::{log_error_message, log_message}, 
+    log::{log_debug_message, log_error_message, log_message}, 
     SOCKET_PATH
 };
 
@@ -39,7 +39,7 @@ pub async fn spawn_ipc_socket_with_listener(
                                 Ok(n) if n > 0 => {
                                     let cmd = String::from_utf8_lossy(&buf[..n]).trim().to_string();
                                     if !cmd.contains("--json") {
-                                        log_message(&format!("Received IPC command: {}", cmd));
+                                        log_debug_message(&format!("Received IPC command: {}", cmd));
                                     }
 
                                     let response = match cmd.as_str() {
@@ -79,7 +79,7 @@ pub async fn spawn_ipc_socket_with_listener(
                                                     };
 
 
-                                                    log_message("Config reloaded successfully");
+                                                    log_debug_message("Config reloaded successfully");
                                                     
                                                     if let Some(cfg) = &cfg_clone {
                                                         format!(
@@ -137,7 +137,7 @@ pub async fn spawn_ipc_socket_with_listener(
                                             } else if step == "all" {
                                                 let mut mgr = manager.lock().await;
                                                 trigger_all_idle_actions(&mut mgr).await;
-                                                log_message("Triggered all idle actions");
+                                                log_debug_message("Triggered all idle actions");
                                                 "All idle actions triggered".to_string()
                                             } else {
                                                 match trigger_action_by_name(manager.clone(), step).await {
@@ -167,10 +167,10 @@ pub async fn spawn_ipc_socket_with_listener(
 
                                             if currently_inhibited {
                                                 set_manual_inhibit(&mut mgr, false).await;
-                                                log_message("Manual inhibit disabled (toggle)");
+                                                log_debug_message("Manual inhibit disabled (toggle)");
                                             } else {
                                                 set_manual_inhibit(&mut mgr, true).await;
-                                                log_message("Manual inhibit enabled (toggle)");
+                                                log_debug_message("Manual inhibit enabled (toggle)");
                                             }
 
                                             let response = if currently_inhibited {

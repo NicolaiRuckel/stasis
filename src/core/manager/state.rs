@@ -4,7 +4,7 @@ use tokio::sync::Notify;
 
 use crate::{
     config::model::{IdleActionBlock, StasisConfig}, 
-    log::log_message,
+    log::{log_debug_message, log_message},
     core::manager::actions::ProcessInfo
 };
 use crate::core::utils::{detect_chassis, ChassisKind};
@@ -313,7 +313,7 @@ impl ManagerState {
         // Wake idle task to recalc immediately
         self.notify.notify_one();
 
-        log_message(&format!(
+        log_debug_message(&format!(
             "Idle timers reloaded from config (active block: {})",
             self.current_block
         ));
