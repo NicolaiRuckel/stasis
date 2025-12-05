@@ -353,6 +353,33 @@ impl ManagerState {
             self.active_inhibitor_count
         ));
     }
+
+    /// Getters / Setters
+    ///
+    /// Wake any idle tasks waiting on state changes
+    pub fn wake_idle_tasks(&self) {
+        self.notify.notify_waiters();
+    }
+
+    /// Update lock state
+    pub fn set_locked(&mut self, locked: bool) {
+        self.lock_state.is_locked = locked;
+    }
+
+    /// Get compositor-managed state
+    pub fn compositor_managed(&self) -> bool {
+        self.compositor_managed
+    }
+
+    /// Set compositor-managed state
+    pub fn set_compositor_managed(&mut self, value: bool) {
+        self.compositor_managed = value;
+    }
+
+    /// Get manual inhibit state
+    pub fn is_manually_paused(&self) -> bool {
+        self.manually_paused
+    }
 }
 
 #[derive(Debug)]

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::{config::model::{IdleAction, LidCloseAction, LidOpenAction}, core::manager::{helpers::{run_action, wake_idle_tasks}, Manager}};
+use crate::{config::model::{IdleAction, LidCloseAction, LidOpenAction}, core::manager::{helpers::run_action, Manager}};
 use crate::log::{log_debug_message, log_error_message, log_message};
 
 pub enum Event {
@@ -29,7 +29,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
             
             mgr.reset_instant_actions();
             mgr.trigger_instant_actions().await;
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
 
         Event::ACDisconnected => {
@@ -39,13 +39,13 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
 
             mgr.reset_instant_actions();
             mgr.trigger_instant_actions().await;
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
         Event::InputActivity => {
             let mut mgr = manager.lock().await;
             mgr.reset().await;
             mgr.state.lock_notify.notify_waiters();
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
          
         Event::Suspend => {
@@ -56,7 +56,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
         Event::Resume => {
             let mut mgr = manager.lock().await;
             mgr.resume(false).await;
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
 
         Event::Wake => {
@@ -65,25 +65,25 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
             let mut mgr = manager.lock().await;
             mgr.resume(false).await;
             mgr.reset().await;
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
                 
         Event::LockScreenDetected => {
             let mut mgr = manager.lock().await;
             mgr.advance_past_lock().await;
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
 
         Event::MediaPlaybackActive => {
             let mut mgr = manager.lock().await;
             mgr.pause(false).await;
-            wake_idle_tasks(&mgr.state)
+            mgr.state.wake_idle_tasks()
         }
 
         Event::MediaPlaybackEnded => {
             let mut mgr = manager.lock().await;
             mgr.resume(false).await;
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
 
         Event::LidClosed => {
@@ -131,7 +131,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                     LidOpenAction::Wake => {
                         mgr.resume(false).await;
                         mgr.reset().await;
-                        wake_idle_tasks(&mgr.state);
+                        mgr.state.wake_idle_tasks();
                     }                   
                     LidOpenAction::Custom(cmd) => {
                         log_message(&format!("Running custom lid-open command: {}", cmd));
@@ -186,7 +186,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
             mgr.advance_past_lock().await;
             
             // Wake the lock watcher loop
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
 
         Event::LoginctlUnlock => {
@@ -196,7 +196,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
             // Reset the manager state as if user activity occurred
             mgr.reset().await;
             mgr.state.lock_notify.notify_waiters();
-            wake_idle_tasks(&mgr.state);
+            mgr.state.wake_idle_tasks();
         }
     }
 }

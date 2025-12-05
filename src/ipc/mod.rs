@@ -10,7 +10,7 @@ use tokio::{
 
 use crate::{
     config, core::{
-        manager::{helpers::{get_manual_inhibit, set_manual_inhibit, trigger_all_idle_actions}, Manager}, 
+        manager::{helpers::{set_manually_paused, trigger_all_idle_actions}, Manager}, 
         services::app_inhibit::AppInhibitor,
         utils::format_duration,
     }, 
@@ -163,13 +163,13 @@ pub async fn spawn_ipc_socket_with_listener(
 
                                         "toggle_inhibit" => {
                                             let mut mgr = manager.lock().await;
-                                            let currently_inhibited = get_manual_inhibit(&mut mgr.state);
+                                            let currently_inhibited = mgr.state.is_manually_paused();
 
                                             if currently_inhibited {
-                                                set_manual_inhibit(&mut mgr, false).await;
+                                                set_manually_paused(&mut mgr, false).await;
                                                 log_debug_message("Manual inhibit disabled (toggle)");
                                             } else {
-                                                set_manual_inhibit(&mut mgr, true).await;
+                                                set_manually_paused(&mut mgr, true).await;
                                                 log_debug_message("Manual inhibit enabled (toggle)");
                                             }
 
