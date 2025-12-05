@@ -3,12 +3,12 @@ pub mod brightness;
 pub mod helpers;
 pub mod idle_loops;
 pub mod inhibitors;
+pub mod processes;
 pub mod state;
 pub mod tasks;
 
 use std::{sync::Arc, time::{Duration, Instant}};
 use tokio::{
-    task::JoinHandle, 
     time::sleep
 };
 
@@ -16,32 +16,25 @@ pub use self::state::ManagerState;
 use crate::{
     config::model::{IdleAction, StasisConfig}, 
     core::manager::{
-        actions::{is_process_running, run_command_detached},
+        actions::run_action,
         brightness::restore_brightness,
-        helpers::run_action,
-        inhibitors::{decr_active_inhibitor, incr_active_inhibitor},
+        inhibitors::{decr_active_inhibitor, incr_active_inhibitor}, 
+        processes::{is_process_running, run_command_detached},
+        tasks::TaskManager,
     }, 
-    log::{log_message, log_debug_message}
+    log::{log_debug_message, log_message}
 };
 
 pub struct Manager {
     pub state: ManagerState,
-    pub spawned_tasks: Vec<JoinHandle<()>>,
-    pub idle_task_handle: Option<JoinHandle<()>>,
-    pub lock_task_handle: Option<JoinHandle<()>>,
-    pub media_task_handle: Option<JoinHandle<()>>,
-    pub input_task_handle: Option<JoinHandle<()>>,
+    pub tasks: TaskManager,
 }
 
 impl Manager {
     pub fn new(cfg: Arc<StasisConfig>) -> Self {
         Self {
             state: ManagerState::new(cfg),
-            spawned_tasks: Vec::new(),
-            idle_task_handle: None,
-            lock_task_handle: None,
-            media_task_handle: None,
-            input_task_handle: None,
+            tasks: TaskManager::new(), 
         }
     }
 
@@ -473,23 +466,7 @@ impl Manager {
 
     pub async fn shutdown(&mut self) {
         self.state.shutdown_flag.notify_waiters();
-
         sleep(Duration::from_millis(200)).await;
-
-        if let Some(handle) = self.idle_task_handle.take() {
-            handle.abort();
-        }
-
-        if let Some(handle) = self.lock_task_handle.take() {
-            handle.abort();
-        }
-
-        if let Some(handle) = self.input_task_handle.take() {
-            handle.abort();
-        }
-
-        for handle in self.spawned_tasks.drain(..) {
-            handle.abort();
-        }
+        self.tasks.abort_all();
     }
 }

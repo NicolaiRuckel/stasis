@@ -1,7 +1,10 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::{config::model::{IdleAction, LidCloseAction, LidOpenAction}, core::manager::{helpers::run_action, Manager}};
+use crate::core::{
+    manager::{actions::run_action, Manager, processes::{run_command_detached}}
+};
+use crate::{config::model::{IdleAction, LidCloseAction, LidOpenAction}};
 use crate::log::{log_debug_message, log_error_message, log_message};
 
 pub enum Event {
@@ -110,7 +113,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                     }                    
                     LidCloseAction::Custom(cmd) => {
                         log_message(&format!("Running custom lid-close command: {}", cmd));
-                        match crate::core::manager::actions::run_command_detached(&cmd).await {
+                        match run_command_detached(&cmd).await {
                             Ok(pid) => log_debug_message(&format!("Custom lid-close command started with PID {}", pid.pid)),
                             Err(e) => log_error_message(&format!("Failed to run custom lid-close command: {}", e)),
                         }
@@ -135,7 +138,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
                     }                   
                     LidOpenAction::Custom(cmd) => {
                         log_message(&format!("Running custom lid-open command: {}", cmd));
-                        let _ = crate::core::manager::actions::run_command_detached(cmd).await;
+                        let _ = run_command_detached(cmd).await;
                     }
                     LidOpenAction::Ignore => {
                         log_message("Lid open ignored by config");
@@ -170,7 +173,7 @@ pub async fn handle_event(manager: &Arc<Mutex<Manager>>, event: Event) {
             // Run the lock-command if it exists
             if let Some(lock_cmd) = lock_cmd_opt {
                 log_message(&format!("Running lock-command: {}", lock_cmd));
-                match crate::core::manager::actions::run_command_detached(&lock_cmd).await {
+                match run_command_detached(&lock_cmd).await {
                     Ok(pid) => {
                         mgr.state.lock_state.process_info = Some(pid.clone());
                     }

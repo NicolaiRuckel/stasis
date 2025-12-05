@@ -39,18 +39,16 @@ pub async fn run_daemon(listener: UnixListener, verbose: bool) -> Result<()> {
     let manager = Manager::new(Arc::clone(&cfg));
     let manager = Arc::new(Mutex::new(manager));
 
-    // Spawn internal background tasks
-    let idle_handle = spawn_idle_task(Arc::clone(&manager));
-    let lock_handle = spawn_lock_watcher(Arc::clone(&manager)).await;
-    let input_handle = spawn_input_task(Arc::clone(&manager));
 
-    // Store handles in manager
+    // Spawn internal background tasks
     {
         let mut mgr = manager.lock().await;
-        mgr.idle_task_handle = Some(idle_handle);
-        mgr.lock_task_handle = Some(lock_handle);
-        mgr.input_task_handle = Some(input_handle);
+        mgr.tasks.spawn_limited(spawn_idle_task(Arc::clone(&manager)));
+        mgr.tasks.spawn_limited(spawn_lock_watcher(Arc::clone(&manager)).await);
+        mgr.tasks.spawn_limited(spawn_input_task(Arc::clone(&manager)));
     }
+
+
     
     // Spawn suspend event listener
     let dbus_manager = Arc::clone(&manager);

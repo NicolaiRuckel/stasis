@@ -1,12 +1,8 @@
 use std::{
-    fs::OpenOptions,
-    os::unix::{
+    fs::OpenOptions, os::unix::{
         fs::OpenOptionsExt,
         io::{AsRawFd, OwnedFd},
-    },
-    path::Path,
-    sync::Arc,
-    time::{Duration, Instant},
+    }, path::Path, sync::Arc, time::{Duration, Instant}
 };
 
 use input::LibinputInterface;
@@ -32,8 +28,8 @@ impl LibinputInterface for InputDetection {
     }
 }
 
-pub fn spawn_input_task(manager: Arc<Mutex<Manager>>) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+pub fn spawn_input_task(manager: Arc<Mutex<Manager>>) -> impl std::future::Future<Output = ()> + Send {
+    async move {
         // Channel: blocking thread → async task
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
         let manager_clone = Arc::clone(&manager);
@@ -140,7 +136,7 @@ pub fn spawn_input_task(manager: Arc<Mutex<Manager>>) -> tokio::task::JoinHandle
 
         // Wait for both to finish
         let _ = tokio::join!(async_handle, blocking_handle);
-    })
+    }
 }
 
 fn silence_stderr() {
